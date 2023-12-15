@@ -58,8 +58,8 @@ export class Kupmios implements Provider {
               maxValSize: parseInt(result.maxValueSize),
               keyDeposit: BigInt(result.stakeKeyDeposit),
               poolDeposit: BigInt(result.poolDeposit),
-              priceMem: parseInt(memNum) / parseInt(memDenom),
-              priceStep: parseInt(stepsNum) / parseInt(stepsDenom),
+              priceMem: [BigInt(memNum), BigInt(memDenom)],
+              priceStep: [BigInt(stepsNum), BigInt(stepsDenom)],
               maxTxExMem: BigInt(result.maxExecutionUnitsPerTransaction.memory),
               maxTxExSteps: BigInt(
                 result.maxExecutionUnitsPerTransaction.steps,
@@ -175,9 +175,9 @@ export class Kupmios implements Provider {
   }
 
   async getDatum(datumHash: DatumHash): Promise<Datum> {
-    const result = await fetch(
+    const result: {datum: string} | undefined = await fetch(
       `${this.kupoUrl}/datums/${datumHash}`,
-    ).then((res) => res.json());
+    ).then((res) => res.json()) as any;
     if (!result || !result.datum) {
       throw new Error(`No datum found for datum hash: ${datumHash}`);
     }

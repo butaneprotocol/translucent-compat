@@ -6,18 +6,18 @@ export function createCostModels(costModels: CostModels): C.Costmdls {
   const costmdls = C.Costmdls.new();
 
   // add plutus v1
-  const costmdlV1 = C.CostModel.new();
+  const costmdlV1 = C.CostModel.empty_model(C.Language.new_plutus_v1())
   Object.values(costModels.PlutusV1).forEach((cost, index) => {
     costmdlV1.set(index, C.Int.new(C.BigNum.from_str(cost.toString())));
   });
-  costmdls.insert(C.Language.new_plutus_v1(), costmdlV1);
+  costmdls.insert(costmdlV1);
 
   // add plutus v2
-  const costmdlV2 = C.CostModel.new_plutus_v2();
+  const costmdlV2 = C.CostModel.empty_model(C.Language.new_plutus_v2())
   Object.values(costModels.PlutusV2 || []).forEach((cost, index) => {
     costmdlV2.set(index, C.Int.new(C.BigNum.from_str(cost.toString())));
   });
-  costmdls.insert(C.Language.new_plutus_v2(), costmdlV2);
+  costmdls.insert(costmdlV2);
 
   return costmdls;
 }
@@ -29,8 +29,8 @@ export const PROTOCOL_PARAMETERS_DEFAULT: ProtocolParameters = {
   maxValSize: 5000,
   keyDeposit: 2000000n,
   poolDeposit: 500000000n,
-  priceMem: 0.0577,
-  priceStep: 0.0000721,
+  priceMem: [577n, 10000n],
+  priceStep: [721n, 10_000_000n],
   maxTxExMem: 14000000n,
   maxTxExSteps: 10000000000n,
   coinsPerUtxoByte: 4310n,

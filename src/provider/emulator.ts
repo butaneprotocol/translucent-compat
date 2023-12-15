@@ -330,7 +330,7 @@ export class Emulator implements Provider {
 
       for (let i = 0; i < (witnesses.native_scripts()?.len() || 0); i++) {
         const witness = witnesses.native_scripts()!.get(i);
-        const scriptHash = witness.hash(C.ScriptHashNamespace.NativeScript)
+        const scriptHash = witness.hash()
           .to_hex();
 
         if (
@@ -362,16 +362,16 @@ export class Emulator implements Provider {
 
     const plutusHashes = (() => {
       const scriptHashes = [];
-      for (let i = 0; i < (witnesses.plutus_scripts()?.len() || 0); i++) {
-        const script = witnesses.plutus_scripts()!.get(i);
-        const scriptHash = script.hash(C.ScriptHashNamespace.PlutusV1)
+      for (let i = 0; i < (witnesses.plutus_v1_scripts()?.len() || 0); i++) {
+        const script = witnesses.plutus_v1_scripts()!.get(i);
+        const scriptHash = script.hash()
           .to_hex();
 
         scriptHashes.push(scriptHash);
       }
       for (let i = 0; i < (witnesses.plutus_v2_scripts()?.len() || 0); i++) {
         const script = witnesses.plutus_v2_scripts()!.get(i);
-        const scriptHash = script.hash(C.ScriptHashNamespace.PlutusV2)
+        const scriptHash = script.hash()
           .to_hex();
 
         scriptHashes.push(scriptHash);
@@ -380,7 +380,7 @@ export class Emulator implements Provider {
     })();
 
     const inputs = body.inputs();
-    inputs.sort();
+    //inputs.sort();
 
     type ResolvedInput = {
       entry: { utxo: UTxO; spent: boolean };
@@ -418,21 +418,21 @@ export class Emulator implements Provider {
           case "Native": {
             const script = C.NativeScript.from_bytes(fromHex(scriptRef.script));
             nativeHashesOptional[
-              script.hash(C.ScriptHashNamespace.NativeScript).to_hex()
+              script.hash().to_hex()
             ] = script;
             break;
           }
           case "PlutusV1": {
-            const script = C.PlutusScript.from_bytes(fromHex(scriptRef.script));
+            const script = C.PlutusV1Script.from_bytes(fromHex(scriptRef.script));
             plutusHashesOptional.push(
-              script.hash(C.ScriptHashNamespace.PlutusV1).to_hex(),
+              script.hash().to_hex(),
             );
             break;
           }
           case "PlutusV2": {
-            const script = C.PlutusScript.from_bytes(fromHex(scriptRef.script));
+            const script = C.PlutusV2Script.from_bytes(fromHex(scriptRef.script));
             plutusHashesOptional.push(
-              script.hash(C.ScriptHashNamespace.PlutusV2).to_hex(),
+              script.hash().to_hex(),
             );
             break;
           }
@@ -469,21 +469,21 @@ export class Emulator implements Provider {
           case "Native": {
             const script = C.NativeScript.from_bytes(fromHex(scriptRef.script));
             nativeHashesOptional[
-              script.hash(C.ScriptHashNamespace.NativeScript).to_hex()
+              script.hash().to_hex()
             ] = script;
             break;
           }
           case "PlutusV1": {
-            const script = C.PlutusScript.from_bytes(fromHex(scriptRef.script));
+            const script = C.PlutusV1Script.from_bytes(fromHex(scriptRef.script));
             plutusHashesOptional.push(
-              script.hash(C.ScriptHashNamespace.PlutusV1).to_hex(),
+              script.hash().to_hex(),
             );
             break;
           }
           case "PlutusV2": {
-            const script = C.PlutusScript.from_bytes(fromHex(scriptRef.script));
+            const script = C.PlutusV2Script.from_bytes(fromHex(scriptRef.script));
             plutusHashesOptional.push(
-              script.hash(C.ScriptHashNamespace.PlutusV2).to_hex(),
+              script.hash().to_hex(),
             );
             break;
           }

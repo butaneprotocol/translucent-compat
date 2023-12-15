@@ -11,8 +11,8 @@ export type ProtocolParameters = {
   maxValSize: number;
   keyDeposit: bigint;
   poolDeposit: bigint;
-  priceMem: number;
-  priceStep: number;
+  priceMem: [bigint, bigint];
+  priceStep: [bigint, bigint];
   maxTxExMem: bigint;
   maxTxExSteps: bigint;
   coinsPerUtxoByte: bigint;
@@ -197,7 +197,7 @@ export type PoolParams = {
   vrfKeyHash: VrfKeyHash;
   pledge: Lovelace;
   cost: Lovelace;
-  margin: number;
+  margin: [bigint, bigint];
   rewardAddress: RewardAddress;
   owners: Array<RewardAddress>;
   relays: Array<Relay>;

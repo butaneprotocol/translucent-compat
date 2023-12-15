@@ -1,5 +1,5 @@
-import { C } from "../core/mod.ts";
-import { Data } from "../mod.ts";
+import { C } from '../core/mod.ts'
+import { Data } from '../mod.ts'
 import {
   Address,
   Assets,
@@ -20,7 +20,7 @@ import {
   UnixTime,
   UTxO,
   WithdrawalValidator,
-} from "../types/mod.ts";
+} from '../types/mod.ts'
 import {
   assetsToValue,
   fromHex,
@@ -28,21 +28,27 @@ import {
   toHex,
   toScriptRef,
   utxoToCore,
-} from "../utils/mod.ts";
-import { applyDoubleCborEncoding } from "../utils/utils.ts";
-import { Lucid } from "./lucid.ts";
-import { TxComplete } from "./tx_complete.ts";
+} from '../utils/mod.ts'
+import { applyDoubleCborEncoding } from '../utils/utils.ts'
+import { Lucid } from './lucid.ts'
+import { TxComplete } from './tx_complete.ts'
 
 export class Tx {
-  txBuilder: C.TransactionBuilder;
+  txBuilder: C.TransactionBuilder
+
+  /* TODO: Add new tasks list so order of attachScript doesn't matter  */
+  private scripts: Record<string, C.PlutusScript>
+  private native_scripts: Record<string, C.NativeScript>
   /** Stores the tx instructions, which get executed after calling .complete() */
-  private tasks: ((that: Tx) => unknown)[];
-  private lucid: Lucid;
+  private tasks: ((that: Tx) => unknown)[]
+  private lucid: Lucid
 
   constructor(lucid: Lucid) {
-    this.lucid = lucid;
-    this.txBuilder = C.TransactionBuilder.new(this.lucid.txBuilderConfig);
-    this.tasks = [];
+    this.lucid = lucid
+    this.txBuilder = C.TransactionBuilder.new(this.lucid.txBuilderConfig)
+    this.tasks = []
+    this.scripts = {}
+    this.native_scripts = {}
   }
 
   /** Read data from utxos. These utxos are only referenced and not spent. */
@@ -50,16 +56,17 @@ export class Tx {
     this.tasks.push(async (that) => {
       for (const utxo of utxos) {
         if (utxo.datumHash) {
-          utxo.datum = Data.to(await that.lucid.datumOf(utxo));
-          // Add datum to witness set, so it can be read from validators
-          const plutusData = C.PlutusData.from_bytes(fromHex(utxo.datum!));
-          that.txBuilder.add_plutus_data(plutusData);
+          throw 'Reference hash not supported'
+          // utxo.datum = Data.to(await that.lucid.datumOf(utxo));
+          // // Add datum to witness set, so it can be read from validators
+          // const plutusData = C.PlutusData.from_bytes(fromHex(utxo.datum!));
+          // that.txBuilder.add_plutus_data(plutusData);
         }
-        const coreUtxo = utxoToCore(utxo);
-        that.txBuilder.add_reference_input(coreUtxo);
+        const coreUtxo = utxoToCore(utxo)
+        that.txBuilder.add_reference_input(coreUtxo)
       }
-    });
-    return this;
+    })
+    return this
   }
 
   /**
@@ -70,25 +77,55 @@ export class Tx {
     this.tasks.push(async (that) => {
       for (const utxo of utxos) {
         if (utxo.datumHash && !utxo.datum) {
-          utxo.datum = Data.to(await that.lucid.datumOf(utxo));
+          utxo.datum = Data.to(await that.lucid.datumOf(utxo))
         }
-        const coreUtxo = utxoToCore(utxo);
-        that.txBuilder.add_input(
-          coreUtxo,
-          (redeemer as undefined) &&
-            C.ScriptWitness.new_plutus_witness(
-              C.PlutusWitness.new(
-                C.PlutusData.from_bytes(fromHex(redeemer!)),
-                utxo.datumHash && utxo.datum
-                  ? C.PlutusData.from_bytes(fromHex(utxo.datum!))
-                  : undefined,
-                undefined,
-              ),
+        const coreUtxo = utxoToCore(utxo)
+        let inputBuilder = C.SingleInputBuilder.new(
+          coreUtxo.input(),
+          coreUtxo.output(),
+        )
+        let mr: C.InputBuilderResult
+        if (redeemer) {
+          let scriptHash = coreUtxo
+            .output()
+            .address()
+            .payment_cred()
+            ?.to_scripthash()
+            ?.to_hex()
+            .toString()!
+          let script = this.scripts[scriptHash]
+          if (!script) {
+            throw 'Scripts must be attached BEFORE they are used'
+          }
+          let datum = coreUtxo.output().datum()?.as_inline_data()
+          mr = inputBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_script(script),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
             ),
-        );
+            C.Ed25519KeyHashes.new(),
+            datum!,
+          )
+        } else {
+          let payCred = coreUtxo.output().address().payment_cred()
+          if (payCred?.kind() == 0) {
+            mr = inputBuilder.payment_key()
+          } else {
+            let scriptHash = payCred?.to_scripthash()?.to_hex().toString()!
+            let ns = this.native_scripts[scriptHash]
+            if (!ns) {
+              throw 'No native script was found for your mint without redeemer!'
+            }
+            mr = inputBuilder.native_script(
+              ns,
+              C.NativeScriptWitnessInfo.assume_signature_count(),
+            )
+          }
+        }
+        that.txBuilder.add_input(mr)
       }
-    });
-    return this;
+    })
+    return this
   }
 
   /**
@@ -98,36 +135,47 @@ export class Tx {
    */
   mintAssets(assets: Assets, redeemer?: Redeemer): Tx {
     this.tasks.push((that) => {
-      const units = Object.keys(assets);
-      const policyId = units[0].slice(0, 56);
-      const mintAssets = C.MintAssets.new();
+      const units = Object.keys(assets)
+      const policyId = units[0].slice(0, 56)
+      const mintAssets = C.MintAssets.new()
       units.forEach((unit) => {
         if (unit.slice(0, 56) !== policyId) {
           throw new Error(
-            "Only one policy id allowed. You can chain multiple mintAssets functions together if you need to mint assets with different policy ids.",
-          );
+            'Only one policy id allowed. You can chain multiple mintAssets functions together if you need to mint assets with different policy ids.',
+          )
         }
         mintAssets.insert(
           C.AssetName.new(fromHex(unit.slice(56))),
           C.Int.from_str(assets[unit].toString()),
-        );
-      });
-      const scriptHash = C.ScriptHash.from_bytes(fromHex(policyId));
-      that.txBuilder.add_mint(
-        scriptHash,
-        mintAssets,
-        redeemer
-          ? C.ScriptWitness.new_plutus_witness(
-            C.PlutusWitness.new(
-              C.PlutusData.from_bytes(fromHex(redeemer!)),
-              undefined,
-              undefined,
-            ),
-          )
-          : undefined,
-      );
-    });
-    return this;
+        )
+      })
+      let mintBuilder = C.SingleMintBuilder.new(mintAssets)
+      let mr: C.MintBuilderResult
+      if (redeemer) {
+        let script = this.scripts[policyId]
+        if (!script) {
+          throw 'Scripts must be attached BEFORE they are used'
+        }
+        mr = mintBuilder.plutus_script(
+          C.PartialPlutusWitness.new(
+            C.PlutusScriptWitness.from_script(script),
+            C.PlutusData.from_bytes(fromHex(redeemer)),
+          ),
+          C.Ed25519KeyHashes.new(),
+        )
+      } else {
+        let ns = this.native_scripts[policyId]
+        if (!ns) {
+          throw 'No native script was found for your mint without redeemer!'
+        }
+        mr = mintBuilder.native_script(
+          ns,
+          C.NativeScriptWitnessInfo.assume_signature_count(),
+        )
+      }
+      that.txBuilder.add_mint(mr!)
+    })
+    return this
   }
 
   /** Pay to a public key or native script address. */
@@ -136,10 +184,10 @@ export class Tx {
       const output = C.TransactionOutput.new(
         addressFromWithNetworkCheck(address, that.lucid),
         assetsToValue(assets),
-      );
-      that.txBuilder.add_output(output);
-    });
-    return this;
+      )
+      that.txBuilder.add_output(C.SingleOutputBuilderResult.new(output))
+    })
+    return this
   }
 
   /** Pay to a public key or native script address with datum or scriptRef. */
@@ -149,8 +197,8 @@ export class Tx {
     assets: Assets,
   ): Tx {
     this.tasks.push((that) => {
-      if (typeof outputData === "string") {
-        outputData = { asHash: outputData };
+      if (typeof outputData === 'string') {
+        outputData = { asHash: outputData }
       }
 
       if (
@@ -158,35 +206,36 @@ export class Tx {
           .length > 1
       ) {
         throw new Error(
-          "Not allowed to set hash, asHash and inline at the same time.",
-        );
+          'Not allowed to set hash, asHash and inline at the same time.',
+        )
       }
 
       const output = C.TransactionOutput.new(
         addressFromWithNetworkCheck(address, that.lucid),
         assetsToValue(assets),
-      );
+      )
 
       if (outputData.hash) {
         output.set_datum(
           C.Datum.new_data_hash(C.DataHash.from_hex(outputData.hash)),
-        );
+        )
       } else if (outputData.asHash) {
-        const plutusData = C.PlutusData.from_bytes(fromHex(outputData.asHash));
-        output.set_datum(C.Datum.new_data_hash(C.hash_plutus_data(plutusData)));
-        that.txBuilder.add_plutus_data(plutusData);
+        throw 'no support for as hash'
+        // const plutusData = C.PlutusData.from_bytes(fromHex(outputData.asHash));
+        // output.set_datum(C.Datum.new_data_hash(C.hash_plutus_data(plutusData)));
+        // that.txBuilder.add_plutus_data(plutusData);
       } else if (outputData.inline) {
-        const plutusData = C.PlutusData.from_bytes(fromHex(outputData.inline));
-        output.set_datum(C.Datum.new_data(C.Data.new(plutusData)));
+        const plutusData = C.PlutusData.from_bytes(fromHex(outputData.inline))
+        output.set_datum(C.Datum.new_data(plutusData))
       }
 
-      const script = outputData.scriptRef;
+      const script = outputData.scriptRef
       if (script) {
-        output.set_script_ref(toScriptRef(script));
+        output.set_script_ref(toScriptRef(script))
       }
-      that.txBuilder.add_output(output);
-    });
-    return this;
+      that.txBuilder.add_output(C.SingleOutputBuilderResult.new(output))
+    })
+    return this
   }
 
   /** Pay to a plutus script address with datum or scriptRef. */
@@ -195,16 +244,16 @@ export class Tx {
     outputData: Datum | OutputData,
     assets: Assets,
   ): Tx {
-    if (typeof outputData === "string") {
-      outputData = { asHash: outputData };
+    if (typeof outputData === 'string') {
+      outputData = { asHash: outputData }
     }
 
     if (!(outputData.hash || outputData.asHash || outputData.inline)) {
       throw new Error(
-        "No datum set. Script output becomes unspendable without datum.",
-      );
+        'No datum set. Script output becomes unspendable without datum.',
+      )
     }
-    return this.payToAddressWithData(address, outputData, assets);
+    return this.payToAddressWithData(address, outputData, assets)
   }
 
   /** Delegate to a stake pool. */
@@ -214,119 +263,154 @@ export class Tx {
     redeemer?: Redeemer,
   ): Tx {
     this.tasks.push((that) => {
-      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress);
+      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress)
 
-      if (
-        addressDetails.type !== "Reward" ||
-        !addressDetails.stakeCredential
-      ) {
-        throw new Error("Not a reward address provided.");
+      if (addressDetails.type !== 'Reward' || !addressDetails.stakeCredential) {
+        throw new Error('Not a reward address provided.')
       }
-      const credential = addressDetails.stakeCredential.type === "Key"
-        ? C.StakeCredential.from_keyhash(
-          C.Ed25519KeyHash.from_bytes(
-            fromHex(addressDetails.stakeCredential.hash),
-          ),
-        )
-        : C.StakeCredential.from_scripthash(
-          C.ScriptHash.from_bytes(
-            fromHex(addressDetails.stakeCredential.hash),
-          ),
-        );
+      const credential =
+        addressDetails.stakeCredential.type === 'Key'
+          ? C.StakeCredential.from_keyhash(
+              C.Ed25519KeyHash.from_bytes(
+                fromHex(addressDetails.stakeCredential.hash),
+              ),
+            )
+          : C.StakeCredential.from_scripthash(
+              C.ScriptHash.from_bytes(
+                fromHex(addressDetails.stakeCredential.hash),
+              ),
+            )
 
-      that.txBuilder.add_certificate(
+      let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_delegation(
           C.StakeDelegation.new(
             credential,
             C.Ed25519KeyHash.from_bech32(poolId),
           ),
         ),
-        redeemer
-          ? C.ScriptWitness.new_plutus_witness(
-            C.PlutusWitness.new(
-              C.PlutusData.from_bytes(fromHex(redeemer!)),
-              undefined,
-              undefined,
-            ),
-          )
-          : undefined,
-      );
-    });
-    return this;
+      )
+      let cr: C.CertificateBuilderResult
+      if (redeemer) {
+        let script = this.scripts[credential.to_scripthash()?.to_hex()!]
+        if (!script) {
+          throw 'Scripts must be attached BEFORE they are used'
+        }
+        cr = certBuilder.plutus_script(
+          C.PartialPlutusWitness.new(
+            C.PlutusScriptWitness.from_script(script),
+            C.PlutusData.from_bytes(fromHex(redeemer)),
+          ),
+          C.Ed25519KeyHashes.new(),
+        )
+      } else {
+        if (credential.kind() == 0) {
+          cr = certBuilder.payment_key()
+        } else {
+          let ns = this.native_scripts[credential.to_scripthash()?.to_hex()!]
+          if (!ns) {
+            throw 'Script with no redeemer should be a nativescript, but none provided'
+          } else {
+            cr = certBuilder.native_script(
+              ns,
+              C.NativeScriptWitnessInfo.assume_signature_count(),
+            )
+          }
+        }
+      }
+
+      that.txBuilder.add_cert(cr)
+    })
+    return this
   }
 
   /** Register a reward address in order to delegate to a pool and receive rewards. */
   registerStake(rewardAddress: RewardAddress): Tx {
     this.tasks.push((that) => {
-      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress);
+      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress)
 
-      if (
-        addressDetails.type !== "Reward" ||
-        !addressDetails.stakeCredential
-      ) {
-        throw new Error("Not a reward address provided.");
+      if (addressDetails.type !== 'Reward' || !addressDetails.stakeCredential) {
+        throw new Error('Not a reward address provided.')
       }
-      const credential = addressDetails.stakeCredential.type === "Key"
-        ? C.StakeCredential.from_keyhash(
-          C.Ed25519KeyHash.from_bytes(
-            fromHex(addressDetails.stakeCredential.hash),
-          ),
-        )
-        : C.StakeCredential.from_scripthash(
-          C.ScriptHash.from_bytes(
-            fromHex(addressDetails.stakeCredential.hash),
-          ),
-        );
+      const credential =
+        addressDetails.stakeCredential.type === 'Key'
+          ? C.StakeCredential.from_keyhash(
+              C.Ed25519KeyHash.from_bytes(
+                fromHex(addressDetails.stakeCredential.hash),
+              ),
+            )
+          : C.StakeCredential.from_scripthash(
+              C.ScriptHash.from_bytes(
+                fromHex(addressDetails.stakeCredential.hash),
+              ),
+            )
 
-      that.txBuilder.add_certificate(
+      that.txBuilder.add_cert(
         C.Certificate.new_stake_registration(
           C.StakeRegistration.new(credential),
         ),
-        undefined,
-      );
-    });
-    return this;
+      )
+    })
+    return this
   }
 
   /** Deregister a reward address. */
   deregisterStake(rewardAddress: RewardAddress, redeemer?: Redeemer): Tx {
     this.tasks.push((that) => {
-      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress);
+      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress)
 
-      if (
-        addressDetails.type !== "Reward" ||
-        !addressDetails.stakeCredential
-      ) {
-        throw new Error("Not a reward address provided.");
+      if (addressDetails.type !== 'Reward' || !addressDetails.stakeCredential) {
+        throw new Error('Not a reward address provided.')
       }
-      const credential = addressDetails.stakeCredential.type === "Key"
-        ? C.StakeCredential.from_keyhash(
-          C.Ed25519KeyHash.from_bytes(
-            fromHex(addressDetails.stakeCredential.hash),
-          ),
-        )
-        : C.StakeCredential.from_scripthash(
-          C.ScriptHash.from_bytes(
-            fromHex(addressDetails.stakeCredential.hash),
-          ),
-        );
+      const credential =
+        addressDetails.stakeCredential.type === 'Key'
+          ? C.StakeCredential.from_keyhash(
+              C.Ed25519KeyHash.from_bytes(
+                fromHex(addressDetails.stakeCredential.hash),
+              ),
+            )
+          : C.StakeCredential.from_scripthash(
+              C.ScriptHash.from_bytes(
+                fromHex(addressDetails.stakeCredential.hash),
+              ),
+            )
 
-      that.txBuilder.add_certificate(
+      let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_deregistration(
           C.StakeDeregistration.new(credential),
         ),
-        redeemer
-          ? C.ScriptWitness.new_plutus_witness(
-            C.PlutusWitness.new(
-              C.PlutusData.from_bytes(fromHex(redeemer!)),
-              undefined,
-              undefined,
-            ),
-          )
-          : undefined,
-      );
-    });
-    return this;
+      )
+      let cr: C.CertificateBuilderResult
+      if (redeemer) {
+        let script = this.scripts[credential.to_scripthash()?.to_hex()!]
+        if (!script) {
+          throw 'Scripts must be attached BEFORE they are used'
+        }
+        cr = certBuilder.plutus_script(
+          C.PartialPlutusWitness.new(
+            C.PlutusScriptWitness.from_script(script),
+            C.PlutusData.from_bytes(fromHex(redeemer)),
+          ),
+          C.Ed25519KeyHashes.new(),
+        )
+      } else {
+        if (credential.kind() == 0) {
+          cr = certBuilder.payment_key()
+        } else {
+          let ns = this.native_scripts[credential.to_scripthash()?.to_hex()!]
+          if (!ns) {
+            throw 'Script with no redeemer should be a nativescript, but none provided'
+          } else {
+            cr = certBuilder.native_script(
+              ns,
+              C.NativeScriptWitnessInfo.assume_signature_count(),
+            )
+          }
+        }
+      }
+
+      that.txBuilder.add_cert(cr)
+    })
+    return this
   }
 
   /** Register a stake pool. A pool deposit is required. The metadataUrl needs to be hosted already before making the registration. */
@@ -335,15 +419,13 @@ export class Tx {
       const poolRegistration = await createPoolRegistration(
         poolParams,
         that.lucid,
-      );
+      )
 
-      const certificate = C.Certificate.new_pool_registration(
-        poolRegistration,
-      );
+      const certificate = C.Certificate.new_pool_registration(poolRegistration)
 
-      that.txBuilder.add_certificate(certificate, undefined);
-    });
-    return this;
+      that.txBuilder.add_cert(certificate)
+    })
+    return this
   }
 
   /** Update a stake pool. No pool deposit is required. The metadataUrl needs to be hosted already before making the update. */
@@ -352,18 +434,16 @@ export class Tx {
       const poolRegistration = await createPoolRegistration(
         poolParams,
         that.lucid,
-      );
+      )
 
       // This flag makes sure a pool deposit is not required
-      poolRegistration.set_is_update(true);
+      //poolRegistration.set_is_update(true)
 
-      const certificate = C.Certificate.new_pool_registration(
-        poolRegistration,
-      );
+      const certificate = C.Certificate.new_pool_registration(poolRegistration)
 
-      that.txBuilder.add_certificate(certificate, undefined);
-    });
-    return this;
+      that.txBuilder.add_cert(certificate)
+    })
+    return this
   }
   /**
    * Retire a stake pool. The epoch needs to be the greater than the current epoch + 1 and less than current epoch + eMax.
@@ -373,10 +453,10 @@ export class Tx {
     this.tasks.push((that) => {
       const certificate = C.Certificate.new_pool_retirement(
         C.PoolRetirement.new(C.Ed25519KeyHash.from_bech32(poolId), epoch),
-      );
-      that.txBuilder.add_certificate(certificate, undefined);
-    });
-    return this;
+      )
+      that.txBuilder.add_cert(certificate)
+    })
+    return this
   }
 
   withdraw(
@@ -385,23 +465,48 @@ export class Tx {
     redeemer?: Redeemer,
   ): Tx {
     this.tasks.push((that) => {
-      that.txBuilder.add_withdrawal(
-        C.RewardAddress.from_address(
-          addressFromWithNetworkCheck(rewardAddress, that.lucid),
-        )!,
+      let rewAdd = C.RewardAddress.from_address(
+        addressFromWithNetworkCheck(rewardAddress, that.lucid),
+      )!
+      let certBuilder = C.SingleWithdrawalBuilder.new(
+        rewAdd,
         C.BigNum.from_str(amount.toString()),
-        redeemer
-          ? C.ScriptWitness.new_plutus_witness(
-            C.PlutusWitness.new(
-              C.PlutusData.from_bytes(fromHex(redeemer!)),
-              undefined,
-              undefined,
-            ),
-          )
-          : undefined,
-      );
-    });
-    return this;
+      )
+      let wr: C.WithdrawalBuilderResult
+      if (redeemer) {
+        let script = this.scripts[
+          rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
+        ]
+        if (!script) {
+          throw 'Scripts must be attached BEFORE they are used'
+        }
+        wr = certBuilder.plutus_script(
+          C.PartialPlutusWitness.new(
+            C.PlutusScriptWitness.from_script(script),
+            C.PlutusData.from_bytes(fromHex(redeemer)),
+          ),
+          C.Ed25519KeyHashes.new(),
+        )
+      } else {
+        if (rewAdd.payment_cred().kind() == 0) {
+          wr = certBuilder.payment_key()
+        } else {
+          let ns = this.native_scripts[
+            rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
+          ]
+          if (!ns) {
+            throw 'Script with no redeemer should be a nativescript, but none provided'
+          } else {
+            wr = certBuilder.native_script(
+              ns,
+              C.NativeScriptWitnessInfo.assume_signature_count(),
+            )
+          }
+        }
+      }
+      that.txBuilder.add_withdrawal(wr)
+    })
+    return this
   }
 
   /**
@@ -410,22 +515,21 @@ export class Tx {
    * The StakeKeyHash is taken when providing a Reward address.
    */
   addSigner(address: Address | RewardAddress): Tx {
-    const addressDetails = this.lucid.utils.getAddressDetails(address);
+    const addressDetails = this.lucid.utils.getAddressDetails(address)
 
-    if (
-      !addressDetails.paymentCredential && !addressDetails.stakeCredential
-    ) {
-      throw new Error("Not a valid address.");
+    if (!addressDetails.paymentCredential && !addressDetails.stakeCredential) {
+      throw new Error('Not a valid address.')
     }
 
-    const credential = addressDetails.type === "Reward"
-      ? addressDetails.stakeCredential!
-      : addressDetails.paymentCredential!;
+    const credential =
+      addressDetails.type === 'Reward'
+        ? addressDetails.stakeCredential!
+        : addressDetails.paymentCredential!
 
-    if (credential.type === "Script") {
-      throw new Error("Only key hashes are allowed as signers.");
+    if (credential.type === 'Script') {
+      throw new Error('Only key hashes are allowed as signers.')
     }
-    return this.addSignerKey(credential.hash);
+    return this.addSignerKey(credential.hash)
   }
 
   /** Add a payment or stake key hash as a required signer of the transaction. */
@@ -433,125 +537,170 @@ export class Tx {
     this.tasks.push((that) => {
       that.txBuilder.add_required_signer(
         C.Ed25519KeyHash.from_bytes(fromHex(keyHash)),
-      );
-    });
-    return this;
+      )
+    })
+    return this
   }
 
   validFrom(unixTime: UnixTime): Tx {
     this.tasks.push((that) => {
-      const slot = that.lucid.utils.unixTimeToSlot(unixTime);
+      const slot = that.lucid.utils.unixTimeToSlot(unixTime)
       that.txBuilder.set_validity_start_interval(
         C.BigNum.from_str(slot.toString()),
-      );
-    });
-    return this;
+      )
+    })
+    return this
   }
 
   validTo(unixTime: UnixTime): Tx {
     this.tasks.push((that) => {
-      const slot = that.lucid.utils.unixTimeToSlot(unixTime);
-      that.txBuilder.set_ttl(C.BigNum.from_str(slot.toString()));
-    });
-    return this;
+      const slot = that.lucid.utils.unixTimeToSlot(unixTime)
+      that.txBuilder.set_ttl(C.BigNum.from_str(slot.toString()))
+    })
+    return this
   }
 
   attachMetadata(label: Label, metadata: Json): Tx {
     this.tasks.push((that) => {
-      that.txBuilder.add_json_metadatum(
+      let aux = C.AuxiliaryData.new()
+      aux.add_metadatum(
         C.BigNum.from_str(label.toString()),
-        JSON.stringify(metadata),
-      );
-    });
-    return this;
+        C.TransactionMetadatum.new_text(JSON.stringify(metadata)),
+      )
+      that.txBuilder.add_auxiliary_data(aux)
+    })
+    return this
   }
 
   /** Converts strings to bytes if prefixed with **'0x'**. */
   attachMetadataWithConversion(label: Label, metadata: Json): Tx {
     this.tasks.push((that) => {
-      that.txBuilder.add_json_metadatum_with_schema(
+      let aux = C.AuxiliaryData.new()
+      aux.add_json_metadatum_with_schema(
         C.BigNum.from_str(label.toString()),
         JSON.stringify(metadata),
         C.MetadataJsonSchema.BasicConversions,
-      );
-    });
-    return this;
+      )
+      that.txBuilder.add_auxiliary_data(aux)
+    })
+    return this
+  }
+
+  /* Same as above but MORE detailed! */
+  attachMetadataWithDetailedConversion(label: Label, metadata: Json): Tx {
+    this.tasks.push((that) => {
+      let aux = C.AuxiliaryData.new()
+      aux.add_json_metadatum_with_schema(
+        C.BigNum.from_str(label.toString()),
+        JSON.stringify(metadata),
+        C.MetadataJsonSchema.DetailedSchema,
+      )
+      that.txBuilder.add_auxiliary_data(aux)
+    })
+    return this
   }
 
   /** Explicitely set the network id in the transaction body. */
   addNetworkId(id: number): Tx {
     this.tasks.push((that) => {
       that.txBuilder.set_network_id(
-        C.NetworkId.from_bytes(fromHex(id.toString(16).padStart(2, "0"))),
-      );
-    });
-    return this;
+        C.NetworkId.from_bytes(fromHex(id.toString(16).padStart(2, '0'))),
+      )
+    })
+    return this
   }
 
   attachSpendingValidator(spendingValidator: SpendingValidator): Tx {
     this.tasks.push((that) => {
-      attachScript(that, spendingValidator);
-    });
-    return this;
+      that.attachScript(spendingValidator)
+    })
+    return this
   }
 
   attachMintingPolicy(mintingPolicy: MintingPolicy): Tx {
     this.tasks.push((that) => {
-      attachScript(that, mintingPolicy);
-    });
-    return this;
+      that.attachScript(mintingPolicy)
+    })
+    return this
   }
 
   attachCertificateValidator(certValidator: CertificateValidator): Tx {
     this.tasks.push((that) => {
-      attachScript(that, certValidator);
-    });
-    return this;
+      that.attachScript(certValidator)
+    })
+    return this
   }
 
   attachWithdrawalValidator(withdrawalValidator: WithdrawalValidator): Tx {
     this.tasks.push((that) => {
-      attachScript(that, withdrawalValidator);
-    });
-    return this;
+      that.attachScript(withdrawalValidator)
+    })
+    return this
+  }
+
+  attachScript({
+    type,
+    script,
+  }:
+    | SpendingValidator
+    | MintingPolicy
+    | CertificateValidator
+    | WithdrawalValidator) {
+    if (type === 'Native') {
+      let ns = C.NativeScript.from_bytes(fromHex(script))
+      this.native_scripts[ns.hash().to_hex()] = ns
+    } else if (type === 'PlutusV1' || type === 'PlutusV2') {
+      let ps: C.PlutusScript
+      if (type === 'PlutusV1') {
+        ps = C.PlutusScript.from_v1(
+          C.PlutusV1Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
+        )
+      } else {
+        ps = C.PlutusScript.from_v2(
+          C.PlutusV2Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
+        )
+      }
+      this.scripts[ps.hash().to_hex()] = ps
+    } else {
+      throw new Error('No variant matched.')
+    }
   }
 
   /** Compose transactions. */
   compose(tx: Tx | null): Tx {
-    if (tx) this.tasks = this.tasks.concat(tx.tasks);
-    return this;
+    if (tx) this.tasks = this.tasks.concat(tx.tasks)
+    return this
   }
 
   async complete(options?: {
-    change?: { address?: Address; outputData?: OutputData };
-    coinSelection?: boolean;
-    nativeUplc?: boolean;
+    change?: { address?: Address; outputData?: OutputData }
+    coinSelection?: boolean
+    nativeUplc?: boolean
   }): Promise<TxComplete> {
     if (
       [
         options?.change?.outputData?.hash,
         options?.change?.outputData?.asHash,
         options?.change?.outputData?.inline,
-      ].filter((b) => b)
-        .length > 1
+      ].filter((b) => b).length > 1
     ) {
       throw new Error(
-        "Not allowed to set hash, asHash and inline at the same time.",
-      );
+        'Not allowed to set hash, asHash and inline at the same time.',
+      )
     }
 
-    let task = this.tasks.shift();
+    let task = this.tasks.shift()
     while (task) {
-      await task(this);
-      task = this.tasks.shift();
+      await task(this)
+      task = this.tasks.shift()
     }
 
-    const utxos = await this.lucid.wallet.getUtxosCore();
+    const utxos = await this.lucid.wallet.getUtxosCore()
 
     const changeAddress: C.Address = addressFromWithNetworkCheck(
       options?.change?.address || (await this.lucid.wallet.address()),
       this.lucid,
-    );
+    )
 
     if (options?.coinSelection || options?.coinSelection === undefined) {
       this.txBuilder.add_inputs_from(
@@ -565,7 +714,7 @@ export class Tx {
           800, // weight distance if not plutus
           5000, // weight utxos
         ]),
-      );
+      )
     }
 
     this.txBuilder.balance(
@@ -573,126 +722,98 @@ export class Tx {
       (() => {
         if (options?.change?.outputData?.hash) {
           return C.Datum.new_data_hash(
-            C.DataHash.from_hex(
-              options.change.outputData.hash,
-            ),
-          );
+            C.DataHash.from_hex(options.change.outputData.hash),
+          )
         } else if (options?.change?.outputData?.asHash) {
           this.txBuilder.add_plutus_data(
             C.PlutusData.from_bytes(fromHex(options.change.outputData.asHash)),
-          );
+          )
           return C.Datum.new_data_hash(
             C.hash_plutus_data(
               C.PlutusData.from_bytes(
                 fromHex(options.change.outputData.asHash),
               ),
             ),
-          );
+          )
         } else if (options?.change?.outputData?.inline) {
           return C.Datum.new_data(
-            C.Data.new(
-              C.PlutusData.from_bytes(
-                fromHex(options.change.outputData.inline),
-              ),
-            ),
-          );
+            C.PlutusData.from_bytes(fromHex(options.change.outputData.inline)),
+          )
         } else {
-          return undefined;
+          return undefined
         }
       })(),
-    );
+    )
+
+    let txRedeemers = this.txBuilder
+      .build_for_evaluation(0, changeAddress)
+      .draft_tx()
+    // todo: Use aiken UPLC to set exunits
+    // let txExUnits = txRedeemers.get_total_ex_units()
+    // for (let i=0; i<txRedeemers.len(); i+=1){
+    //   let redeemer = txRedeemers.get(i);
+    //   let units = redeemer.ex_units()
+    // }
 
     return new TxComplete(
       this.lucid,
-      await this.txBuilder.construct(
-        utxos,
-        changeAddress,
-        options?.nativeUplc === undefined ? true : options?.nativeUplc,
-      ),
-    );
+      this.txBuilder.build_for_evaluation(0, changeAddress).draft_tx(),
+    )
   }
 
   /** Return the current transaction body in Hex encoded Cbor. */
   async toString(): Promise<string> {
-    let task = this.tasks.shift();
+    let task = this.tasks.shift()
     while (task) {
-      await task(this);
-      task = this.tasks.shift();
+      await task(this)
+      task = this.tasks.shift()
     }
 
-    return toHex(this.txBuilder.to_bytes());
+    //return toHex(this.txBuilder);
+    return 'INCOMPLETE'
   }
-}
-
-function attachScript(
-  tx: Tx,
-  { type, script }:
-    | SpendingValidator
-    | MintingPolicy
-    | CertificateValidator
-    | WithdrawalValidator,
-) {
-  if (type === "Native") {
-    return tx.txBuilder.add_native_script(
-      C.NativeScript.from_bytes(fromHex(script)),
-    );
-  } else if (type === "PlutusV1") {
-    return tx.txBuilder.add_plutus_script(
-      C.PlutusScript.from_bytes(fromHex(applyDoubleCborEncoding(script))),
-    );
-  } else if (type === "PlutusV2") {
-    return tx.txBuilder.add_plutus_v2_script(
-      C.PlutusScript.from_bytes(fromHex(applyDoubleCborEncoding(script))),
-    );
-  }
-  throw new Error("No variant matched.");
 }
 
 async function createPoolRegistration(
   poolParams: PoolParams,
   lucid: Lucid,
 ): Promise<C.PoolRegistration> {
-  const poolOwners = C.Ed25519KeyHashes.new();
+  const poolOwners = C.Ed25519KeyHashes.new()
   poolParams.owners.forEach((owner) => {
-    const { stakeCredential } = lucid.utils.getAddressDetails(owner);
-    if (stakeCredential?.type === "Key") {
-      poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash));
-    } else throw new Error("Only key hashes allowed for pool owners.");
-  });
+    const { stakeCredential } = lucid.utils.getAddressDetails(owner)
+    if (stakeCredential?.type === 'Key') {
+      poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash))
+    } else throw new Error('Only key hashes allowed for pool owners.')
+  })
 
   const metadata = poolParams.metadataUrl
-    ? await fetch(
-      poolParams.metadataUrl,
-    )
-      .then((res) => res.arrayBuffer())
-    : null;
+    ? await fetch(poolParams.metadataUrl).then((res) => res.arrayBuffer())
+    : null
 
   const metadataHash = metadata
-    ? C.PoolMetadataHash.from_bytes(
-      C.hash_blake2b256(new Uint8Array(metadata)),
-    )
-    : null;
+    ? C.PoolMetadataHash.from_bytes(C.hash_blake2b256(new Uint8Array(metadata)))
+    : null
 
-  const relays = C.Relays.new();
+  const relays = C.Relays.new()
   poolParams.relays.forEach((relay) => {
     switch (relay.type) {
-      case "SingleHostIp": {
+      case 'SingleHostIp': {
         const ipV4 = relay.ipV4
           ? C.Ipv4.new(
-            new Uint8Array(relay.ipV4.split(".").map((b) => parseInt(b))),
-          )
-          : undefined;
+              new Uint8Array(relay.ipV4.split('.').map((b) => parseInt(b))),
+            )
+          : undefined
         const ipV6 = relay.ipV6
-          ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(":", "")))
-          : undefined;
+          ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(':', '')))
+          : undefined
         relays.add(
           C.Relay.new_single_host_addr(
             C.SingleHostAddr.new(relay.port, ipV4, ipV6),
           ),
-        );
-        break;
+        )
+        break
       }
-      case "SingleHostDomainName": {
+      case 'SingleHostDomainName': {
         relays.add(
           C.Relay.new_single_host_name(
             C.SingleHostName.new(
@@ -700,19 +821,19 @@ async function createPoolRegistration(
               C.DNSRecordAorAAAA.new(relay.domainName!),
             ),
           ),
-        );
-        break;
+        )
+        break
       }
-      case "MultiHost": {
+      case 'MultiHost': {
         relays.add(
           C.Relay.new_multi_host_name(
             C.MultiHostName.new(C.DNSRecordSRV.new(relay.domainName!)),
           ),
-        );
-        break;
+        )
+        break
       }
     }
-  });
+  })
 
   return C.PoolRegistration.new(
     C.PoolParams.new(
@@ -720,35 +841,35 @@ async function createPoolRegistration(
       C.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
       C.BigNum.from_str(poolParams.pledge.toString()),
       C.BigNum.from_str(poolParams.cost.toString()),
-      C.UnitInterval.from_float(poolParams.margin),
+      C.UnitInterval.new(
+        C.BigNum.from_str(poolParams.margin[0].toString()),
+        C.BigNum.from_str(poolParams.margin[1].toString()),
+      ),
       C.RewardAddress.from_address(
         addressFromWithNetworkCheck(poolParams.rewardAddress, lucid),
       )!,
       poolOwners,
       relays,
       metadataHash
-        ? C.PoolMetadata.new(
-          C.Url.new(poolParams.metadataUrl!),
-          metadataHash,
-        )
+        ? C.PoolMetadata.new(C.URL.new(poolParams.metadataUrl!), metadataHash)
         : undefined,
     ),
-  );
+  )
 }
 
 function addressFromWithNetworkCheck(
   address: Address | RewardAddress,
   lucid: Lucid,
 ): C.Address {
-  const { type, networkId } = lucid.utils.getAddressDetails(address);
+  const { type, networkId } = lucid.utils.getAddressDetails(address)
 
-  const actualNetworkId = networkToId(lucid.network);
+  const actualNetworkId = networkToId(lucid.network)
   if (networkId !== actualNetworkId) {
     throw new Error(
       `Invalid address: Expected address with network id ${actualNetworkId}, but got ${networkId}`,
-    );
+    )
   }
-  return type === "Byron"
+  return type === 'Byron'
     ? C.ByronAddress.from_base58(address).to_address()
-    : C.Address.from_bech32(address);
+    : C.Address.from_bech32(address)
 }

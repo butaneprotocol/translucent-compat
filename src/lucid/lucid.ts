@@ -85,32 +85,10 @@ export class Lucid {
         .max_value_size(protocolParameters.maxValSize)
         .collateral_percentage(protocolParameters.collateralPercentage)
         .max_collateral_inputs(protocolParameters.maxCollateralInputs)
-        .max_tx_ex_units(
-          C.ExUnits.new(
-            C.BigNum.from_str(protocolParameters.maxTxExMem.toString()),
-            C.BigNum.from_str(protocolParameters.maxTxExSteps.toString()),
-          ),
-        )
-        .ex_unit_prices(
-          C.ExUnitPrices.from_float(
-            protocolParameters.priceMem,
-            protocolParameters.priceStep,
-          ),
-        )
-        .slot_config(
-          C.BigNum.from_str(slotConfig.zeroTime.toString()),
-          C.BigNum.from_str(slotConfig.zeroSlot.toString()),
-          slotConfig.slotLength,
-        )
-        .blockfrost(
-          // We have Aiken now as native plutus core engine (primary), but we still support blockfrost (secondary) in case of bugs.
-          C.Blockfrost.new(
-            // deno-lint-ignore no-explicit-any
-            ((provider as any)?.url || "") + "/utils/txs/evaluate",
-            // deno-lint-ignore no-explicit-any
-            (provider as any)?.projectId || "",
-          ),
-        )
+        .ex_unit_prices(C.ExUnitPrices.new(
+              C.UnitInterval.new(C.BigNum.from_str(protocolParameters.priceMem[0].toString()), C.BigNum.from_str(protocolParameters.priceMem[1].toString())),
+              C.UnitInterval.new(C.BigNum.from_str(protocolParameters.priceStep[0].toString()), C.BigNum.from_str(protocolParameters.priceStep[1].toString())),
+          ))
         .costmdls(createCostModels(protocolParameters.costModels))
         .build();
     }

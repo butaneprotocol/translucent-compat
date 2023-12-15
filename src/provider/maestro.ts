@@ -17,7 +17,6 @@ import {
   Unit,
   UTxO,
 } from "../types/mod.ts";
-import packageJson from "../../package.json" assert { type: "json" };
 
 export type MaestroSupportedNetworks = "Mainnet" | "Preprod" | "Preview";
 
@@ -44,11 +43,11 @@ export class Maestro implements Provider {
     }).then((res) => res.json());
     const result = timestampedResult.data;
     // Decimal numbers in Maestro are given as ratio of two numbers represented by string of format "firstNumber/secondNumber".
-    const decimalFromRationalString = (str: string): number => {
+    const rationalFromRationalString = (str: string): [bigint, bigint] => {
       const forwardSlashIndex = str.indexOf("/");
-      return parseInt(str.slice(0, forwardSlashIndex)) /
-        parseInt(str.slice(forwardSlashIndex + 1));
-    };
+      return [BigInt(str.slice(0, forwardSlashIndex)),
+        BigInt(str.slice(forwardSlashIndex + 1))];
+    }
     // To rename keys in an object by the given key-map.
     // deno-lint-ignore no-explicit-any
     const renameKeysAndSort = (obj: any, newKeys: any) => {
@@ -71,8 +70,8 @@ export class Maestro implements Provider {
       maxValSize: parseInt(result.max_value_size),
       keyDeposit: BigInt(result.stake_key_deposit),
       poolDeposit: BigInt(result.pool_deposit),
-      priceMem: decimalFromRationalString(result.prices.memory),
-      priceStep: decimalFromRationalString(result.prices.steps),
+      priceMem: rationalFromRationalString(result.prices.memory),
+      priceStep: rationalFromRationalString(result.prices.steps),
       maxTxExMem: BigInt(result.max_execution_units_per_transaction.memory),
       maxTxExSteps: BigInt(result.max_execution_units_per_transaction.steps),
       coinsPerUtxoByte: BigInt(result.coins_per_utxo_byte),
@@ -358,5 +357,3 @@ type MaestroUtxo = {
 };
 
 type MaestroUtxos = Array<MaestroUtxo>;
-
-const lucid = packageJson.version; // Lucid version

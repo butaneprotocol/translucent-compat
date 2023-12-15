@@ -10,10 +10,7 @@ import {
   toUnit,
   TxHash,
 } from "../src/mod.ts";
-import {
-  assert,
-  assertEquals,
-} from "https://deno.land/std@0.145.0/testing/asserts.ts";
+import {assert, assertEquals} from "./util.ts"
 
 async function generateAccount(assets: Assets) {
   const seedPhrase = generateSeedPhrase();
@@ -34,7 +31,7 @@ const lucid = await Lucid.new(emulator);
 
 lucid.selectWalletFromSeed(ACCOUNT_0.seedPhrase);
 
-Deno.test("Correct start balance", async () => {
+describe("Correct start balance", async () => {
   const utxos = await lucid.wallet.getUtxos();
   const lovelace = utxos.reduce(
     (amount, utxo) => amount + utxo.assets.lovelace,
@@ -43,7 +40,7 @@ Deno.test("Correct start balance", async () => {
   assertEquals(lovelace, ACCOUNT_0.assets.lovelace);
 });
 
-Deno.test("Paid to address", async () => {
+describe("Paid to address", async () => {
   const recipient =
     "addr_test1qrupyvhe20s0hxcusrzlwp868c985dl8ukyr44gfvpqg4ek3vp92wfpentxz4f853t70plkp3vvkzggjxknd93v59uysvc54h7";
 
@@ -68,7 +65,7 @@ Deno.test("Paid to address", async () => {
   assertEquals(utxos[0].datum, datum);
 });
 
-Deno.test("Missing vkey witness", async () => {
+describe("Missing vkey witness", async () => {
   const recipient =
     "addr_test1wqag3rt979nep9g2wtdwu8mr4gz6m4kjdpp5zp705km8wys6t2kla";
 
@@ -87,7 +84,7 @@ Deno.test("Missing vkey witness", async () => {
   }
 });
 
-Deno.test("Mint asset in slot range", async () => {
+describe("Mint asset in slot range", async () => {
   const { paymentCredential } = getAddressDetails(ACCOUNT_0.address);
   const { paymentCredential: paymentCredential2 } = getAddressDetails(
     ACCOUNT_1.address,
@@ -140,7 +137,7 @@ Deno.test("Mint asset in slot range", async () => {
   }
 });
 
-Deno.test("Reward withdrawal", async () => {
+describe("Reward withdrawal", async () => {
   const rewardAddress = await lucid.wallet.rewardAddress();
   const poolId = "pool1jsa3rv0dqtkv2dv2rcx349yfx6rxqyvrnvdye4ps3wxyws6q95m";
   const REWARD_AMOUNT = 100000000n;
@@ -196,7 +193,7 @@ Deno.test("Reward withdrawal", async () => {
   });
 });
 
-Deno.test("Evaluate a contract", async () => {
+describe("Evaluate a contract", async () => {
   const alwaysSucceedScript: SpendingValidator = {
     type: "PlutusV2",
     script: "49480100002221200101",
@@ -224,7 +221,7 @@ Deno.test("Evaluate a contract", async () => {
   emulator.awaitSlot(100);
 });
 
-Deno.test("Check required signer", async () => {
+describe("Check required signer", async () => {
   const tx = await lucid.newTx().addSigner(ACCOUNT_1.address).payToAddress(
     ACCOUNT_1.address,
     { lovelace: 5000000n },
