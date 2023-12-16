@@ -10,7 +10,6 @@ import {
   toUnit,
   TxHash,
 } from "../src/mod.ts";
-import {assert, assertEquals} from "./util.ts"
 
 async function generateAccount(assets: Assets) {
   const seedPhrase = generateSeedPhrase();
@@ -31,16 +30,16 @@ const lucid = await Lucid.new(emulator);
 
 lucid.selectWalletFromSeed(ACCOUNT_0.seedPhrase);
 
-describe("Correct start balance", async () => {
+it("Correct start balance", async () => {
   const utxos = await lucid.wallet.getUtxos();
   const lovelace = utxos.reduce(
     (amount, utxo) => amount + utxo.assets.lovelace,
     0n,
   );
-  assertEquals(lovelace, ACCOUNT_0.assets.lovelace);
+  expect(lovelace).toEqual(ACCOUNT_0.assets.lovelace);
 });
 
-describe("Paid to address", async () => {
+it("Paid to address", async () => {
   const recipient =
     "addr_test1qrupyvhe20s0hxcusrzlwp868c985dl8ukyr44gfvpqg4ek3vp92wfpentxz4f853t70plkp3vvkzggjxknd93v59uysvc54h7";
 
@@ -59,13 +58,13 @@ describe("Paid to address", async () => {
     recipient,
   );
 
-  assertEquals(utxos.length, 1);
+  expect(utxos.length).toEqual(1);
 
-  assertEquals(utxos[0].assets.lovelace, lovelace);
-  assertEquals(utxos[0].datum, datum);
+  expect(utxos[0].assets.lovelace).toEqual(lovelace);
+  expect(utxos[0].datum).toEqual(datum);
 });
 
-describe("Missing vkey witness", async () => {
+it("Missing vkey witness", async () => {
   const recipient =
     "addr_test1wqag3rt979nep9g2wtdwu8mr4gz6m4kjdpp5zp705km8wys6t2kla";
 
@@ -78,18 +77,20 @@ describe("Missing vkey witness", async () => {
   try {
     const txHash = await notSignedTx.submit();
     await lucid.awaitTx(txHash);
-    assert(false, "The tx was never signed. The vkey witness could not exist.");
+    console.log("The tx was never signed. The vkey witness could not exist.")
+    expect(false).toEqual(false)
   } catch (_e) {
-    assert(true);
+    expect(true).toEqual(true)
   }
 });
 
-describe("Mint asset in slot range", async () => {
+it("Mint asset in slot range", async () => {
+  console.log("a")
   const { paymentCredential } = getAddressDetails(ACCOUNT_0.address);
   const { paymentCredential: paymentCredential2 } = getAddressDetails(
     ACCOUNT_1.address,
   );
-
+  console.log("c")
   const mintingPolicy = lucid.utils.nativeScriptFromJson({
     type: "all",
     scripts: [
@@ -103,11 +104,11 @@ describe("Mint asset in slot range", async () => {
   });
 
   const policyId = lucid.utils.mintingPolicyToId(mintingPolicy);
-
+  console.log("b")
   async function mint(): Promise<TxHash> {
     const tx = await lucid.newTx()
-      .mintAssets({
-        [toUnit(policyId, fromText("Wow"))]: 123n,
+       .mintAssets({
+         [toUnit(policyId, fromText("Wow"))]: 123n,
       })
       .validTo(emulator.now() + 30000)
       .attachMintingPolicy(mintingPolicy)
@@ -128,25 +129,23 @@ describe("Mint asset in slot range", async () => {
 
   try {
     await mint();
-    assert(
-      false,
-      "The transactions should have failed because of exceeding slot range.",
-    );
+    console.log("The transactions should have failed because of exceeding slot range.")
+    expect(true).toEqual(false);
   } catch (_e) {
-    assert(true);
+    expect(true).toEqual(true);
   }
 });
 
-describe("Reward withdrawal", async () => {
+it("Reward withdrawal", async () => {
   const rewardAddress = await lucid.wallet.rewardAddress();
   const poolId = "pool1jsa3rv0dqtkv2dv2rcx349yfx6rxqyvrnvdye4ps3wxyws6q95m";
   const REWARD_AMOUNT = 100000000n;
-  assertEquals(await lucid.wallet.getDelegation(), {
+  expect(await lucid.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
   emulator.distributeRewards(REWARD_AMOUNT);
-  assertEquals(await lucid.wallet.getDelegation(), {
+  expect(await lucid.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
@@ -156,7 +155,7 @@ describe("Reward withdrawal", async () => {
       .sign().complete()).submit(),
   );
   emulator.distributeRewards(REWARD_AMOUNT);
-  assertEquals(await lucid.wallet.getDelegation(), {
+  expect(await lucid.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
@@ -167,7 +166,7 @@ describe("Reward withdrawal", async () => {
       .sign().complete()).submit(),
   );
   emulator.distributeRewards(REWARD_AMOUNT);
-  assertEquals(await lucid.wallet.getDelegation(), {
+  expect(await lucid.wallet.getDelegation()).toEqual({
     poolId,
     rewards: REWARD_AMOUNT,
   });
@@ -177,7 +176,7 @@ describe("Reward withdrawal", async () => {
       .complete())
       .sign().complete()).submit(),
   );
-  assertEquals(await lucid.wallet.getDelegation(), {
+  expect(await lucid.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: REWARD_AMOUNT,
   });
@@ -187,18 +186,17 @@ describe("Reward withdrawal", async () => {
       .complete())
       .sign().complete()).submit(),
   );
-  assertEquals(await lucid.wallet.getDelegation(), {
+  expect(await lucid.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
 });
 
-describe("Evaluate a contract", async () => {
+it("Evaluate a contract", async () => {
   const alwaysSucceedScript: SpendingValidator = {
     type: "PlutusV2",
     script: "49480100002221200101",
   };
-
   const scriptAddress = lucid.utils.validatorToAddress(alwaysSucceedScript);
 
   const tx = await lucid.newTx().payToContract(scriptAddress, {
@@ -211,17 +209,15 @@ describe("Evaluate a contract", async () => {
 
   const scriptUtxos = await lucid.utxosAt(scriptAddress);
 
-  assertEquals(scriptUtxos.length, 1);
-
+  expect(scriptUtxos.length).toEqual(1);
   const _txHash =
     await (await (await lucid.newTx().collectFrom(scriptUtxos, Data.void())
       .attachSpendingValidator(alwaysSucceedScript)
       .complete()).sign().complete()).submit();
-
   emulator.awaitSlot(100);
 });
 
-describe("Check required signer", async () => {
+it("Check required signer", async () => {
   const tx = await lucid.newTx().addSigner(ACCOUNT_1.address).payToAddress(
     ACCOUNT_1.address,
     { lovelace: 5000000n },

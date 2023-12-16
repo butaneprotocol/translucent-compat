@@ -212,13 +212,12 @@ export type Relay = {
   domainName?: string;
 };
 
-export type NativeScript = {
-  type: "sig" | "all" | "any" | "before" | "atLeast" | "after";
-  keyHash?: KeyHash;
-  required?: number;
-  slot?: Slot;
-  scripts?: NativeScript[];
-};
+export type NativeScript = {type: "sig", keyHash: KeyHash}
+  | {type: "all", scripts: NativeScript[]}
+  | {type: "any", scripts: NativeScript[]}
+  | {type: "before", slot: Slot}
+  | {type: "after", slot: Slot}
+  | {type: "atLeast", required: number, scripts: NativeScript[]}
 
 export type SlotConfig = {
   zeroTime: UnixTime;

@@ -4,3 +4,4 @@ node_modules
 dist
 deno.lock
 test.ts
+uplc/target

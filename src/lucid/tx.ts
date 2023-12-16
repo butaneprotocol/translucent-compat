@@ -9,12 +9,14 @@ import {
   Label,
   Lovelace,
   MintingPolicy,
+  Network,
   OutputData,
   PaymentKeyHash,
   PoolId,
   PoolParams,
   Redeemer,
   RewardAddress,
+  SlotConfig,
   SpendingValidator,
   StakeKeyHash,
   UnixTime,
@@ -23,6 +25,7 @@ import {
 } from '../types/mod.ts'
 import {
   assetsToValue,
+  createCostModels,
   fromHex,
   networkToId,
   toHex,
@@ -32,6 +35,8 @@ import {
 import { applyDoubleCborEncoding } from '../utils/utils.ts'
 import { Lucid } from './lucid.ts'
 import { TxComplete } from './tx_complete.ts'
+import * as uplc from 'uplc'
+import { SLOT_CONFIG_NETWORK } from '../plutus/time.ts'
 
 export class Tx {
   txBuilder: C.TransactionBuilder
@@ -41,12 +46,16 @@ export class Tx {
   private native_scripts: Record<string, C.NativeScript>
   /** Stores the tx instructions, which get executed after calling .complete() */
   private tasks: ((that: Tx) => unknown)[]
+  private earlyTasks: ((that: Tx) => unknown)[]
   private lucid: Lucid
+
+  private UTxOs: C.TransactionUnspentOutput[] = []
 
   constructor(lucid: Lucid) {
     this.lucid = lucid
     this.txBuilder = C.TransactionBuilder.new(this.lucid.txBuilderConfig)
     this.tasks = []
+    this.earlyTasks = []
     this.scripts = {}
     this.native_scripts = {}
   }
@@ -80,6 +89,7 @@ export class Tx {
           utxo.datum = Data.to(await that.lucid.datumOf(utxo))
         }
         const coreUtxo = utxoToCore(utxo)
+        this.UTxOs.push(coreUtxo)
         let inputBuilder = C.SingleInputBuilder.new(
           coreUtxo.input(),
           coreUtxo.output(),
@@ -95,7 +105,7 @@ export class Tx {
             .toString()!
           let script = this.scripts[scriptHash]
           if (!script) {
-            throw 'Scripts must be attached BEFORE they are used'
+            throw 'Script was not attached for UTxO spend'
           }
           let datum = coreUtxo.output().datum()?.as_inline_data()
           mr = inputBuilder.plutus_script(
@@ -345,9 +355,11 @@ export class Tx {
             )
 
       that.txBuilder.add_cert(
-        C.Certificate.new_stake_registration(
-          C.StakeRegistration.new(credential),
-        ),
+        C.SingleCertificateBuilder.new(
+          C.Certificate.new_stake_registration(
+            C.StakeRegistration.new(credential),
+          ),
+        ).skip_witness(),
       )
     })
     return this
@@ -414,37 +426,37 @@ export class Tx {
   }
 
   /** Register a stake pool. A pool deposit is required. The metadataUrl needs to be hosted already before making the registration. */
-  registerPool(poolParams: PoolParams): Tx {
-    this.tasks.push(async (that) => {
-      const poolRegistration = await createPoolRegistration(
-        poolParams,
-        that.lucid,
-      )
+  // registerPool(poolParams: PoolParams): Tx {
+  //   this.tasks.push(async (that) => {
+  //     const poolRegistration = await createPoolRegistration(
+  //       poolParams,
+  //       that.lucid,
+  //     )
 
-      const certificate = C.Certificate.new_pool_registration(poolRegistration)
+  //     const certificate = C.Certificate.new_pool_registration(poolRegistration)
 
-      that.txBuilder.add_cert(certificate)
-    })
-    return this
-  }
+  //     that.txBuilder.add_cert(certificate)
+  //   })
+  //   return this
+  // }
 
-  /** Update a stake pool. No pool deposit is required. The metadataUrl needs to be hosted already before making the update. */
-  updatePool(poolParams: PoolParams): Tx {
-    this.tasks.push(async (that) => {
-      const poolRegistration = await createPoolRegistration(
-        poolParams,
-        that.lucid,
-      )
+  // /** Update a stake pool. No pool deposit is required. The metadataUrl needs to be hosted already before making the update. */
+  // updatePool(poolParams: PoolParams): Tx {
+  //   this.tasks.push(async (that) => {
+  //     const poolRegistration = await createPoolRegistration(
+  //       poolParams,
+  //       that.lucid,
+  //     )
 
-      // This flag makes sure a pool deposit is not required
-      //poolRegistration.set_is_update(true)
+  //     // This flag makes sure a pool deposit is not required
+  //     //poolRegistration.set_is_update(true)
 
-      const certificate = C.Certificate.new_pool_registration(poolRegistration)
+  //     const certificate = C.Certificate.new_pool_registration(poolRegistration)
 
-      that.txBuilder.add_cert(certificate)
-    })
-    return this
-  }
+  //     that.txBuilder.add_cert(certificate)
+  //   })
+  //   return this
+  // }
   /**
    * Retire a stake pool. The epoch needs to be the greater than the current epoch + 1 and less than current epoch + eMax.
    * The pool deposit will be sent to reward address as reward after full retirement of the pool.
@@ -611,28 +623,28 @@ export class Tx {
   }
 
   attachSpendingValidator(spendingValidator: SpendingValidator): Tx {
-    this.tasks.push((that) => {
+    this.earlyTasks.push((that) => {
       that.attachScript(spendingValidator)
     })
     return this
   }
 
   attachMintingPolicy(mintingPolicy: MintingPolicy): Tx {
-    this.tasks.push((that) => {
+    this.earlyTasks.push((that) => {
       that.attachScript(mintingPolicy)
     })
     return this
   }
 
   attachCertificateValidator(certValidator: CertificateValidator): Tx {
-    this.tasks.push((that) => {
+    this.earlyTasks.push((that) => {
       that.attachScript(certValidator)
     })
     return this
   }
 
   attachWithdrawalValidator(withdrawalValidator: WithdrawalValidator): Tx {
-    this.tasks.push((that) => {
+    this.earlyTasks.push((that) => {
       that.attachScript(withdrawalValidator)
     })
     return this
@@ -689,75 +701,70 @@ export class Tx {
       )
     }
 
-    let task = this.tasks.shift()
+    let task = this.earlyTasks.shift()
+    while (task) {
+      await task(this)
+      task = this.earlyTasks.shift()
+    }
+    task = this.tasks.shift()
     while (task) {
       await task(this)
       task = this.tasks.shift()
     }
 
-    const utxos = await this.lucid.wallet.getUtxosCore()
+    const rawWalletUTxOs = await this.lucid.wallet.getUtxosCore()
+    let walletUTxOs: C.TransactionUnspentOutput[] = []
+    for (let i = 0; i < rawWalletUTxOs.len(); i++) {
+      walletUTxOs.push(rawWalletUTxOs.get(i))
+    }
+    let allUtxos = [...this.UTxOs, ...walletUTxOs]
 
     const changeAddress: C.Address = addressFromWithNetworkCheck(
       options?.change?.address || (await this.lucid.wallet.address()),
       this.lucid,
     )
-
-    if (options?.coinSelection || options?.coinSelection === undefined) {
-      this.txBuilder.add_inputs_from(
-        utxos,
-        changeAddress,
-        Uint32Array.from([
-          200, // weight ideal > 100 inputs
-          1000, // weight ideal < 100 inputs
-          1500, // weight assets if plutus
-          800, // weight assets if not plutus
-          800, // weight distance if not plutus
-          5000, // weight utxos
-        ]),
+    for (const utxo of walletUTxOs) {
+      this.txBuilder.add_utxo(
+        C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
+      )
+    }
+    this.txBuilder.select_utxos(3)
+    let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
+      0,
+      changeAddress,
+    )
+    const protocolParameters = await this.lucid.provider.getProtocolParameters()
+    const costMdls = createCostModels(protocolParameters.costModels)
+    const slotConfig: SlotConfig = SLOT_CONFIG_NETWORK[this.lucid.network]
+    let draftTxBytes = txRedeemerBuilder.draft_tx().to_bytes()
+    const uplcResults = uplc.eval_phase_two_raw(
+      draftTxBytes,
+      allUtxos.map((x) => x.input().to_bytes()),
+      allUtxos.map((x) => x.output().to_bytes()),
+      costMdls.to_bytes(),
+      protocolParameters.maxTxExSteps,
+      protocolParameters.maxTxExMem,
+      BigInt(slotConfig.zeroTime),
+      BigInt(slotConfig.zeroSlot),
+      slotConfig.slotLength,
+    )
+    for (const redeemerBytes of uplcResults) {
+      let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes)
+      this.txBuilder.set_exunits(
+        C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
+        redeemer.ex_units(),
       )
     }
 
-    this.txBuilder.balance(
-      changeAddress,
-      (() => {
-        if (options?.change?.outputData?.hash) {
-          return C.Datum.new_data_hash(
-            C.DataHash.from_hex(options.change.outputData.hash),
-          )
-        } else if (options?.change?.outputData?.asHash) {
-          this.txBuilder.add_plutus_data(
-            C.PlutusData.from_bytes(fromHex(options.change.outputData.asHash)),
-          )
-          return C.Datum.new_data_hash(
-            C.hash_plutus_data(
-              C.PlutusData.from_bytes(
-                fromHex(options.change.outputData.asHash),
-              ),
-            ),
-          )
-        } else if (options?.change?.outputData?.inline) {
-          return C.Datum.new_data(
-            C.PlutusData.from_bytes(fromHex(options.change.outputData.inline)),
-          )
-        } else {
-          return undefined
-        }
-      })(),
-    )
-
-    let txRedeemers = this.txBuilder
-      .build_for_evaluation(0, changeAddress)
-      .draft_tx()
-    // todo: Use aiken UPLC to set exunits
-    // let txExUnits = txRedeemers.get_total_ex_units()
-    // for (let i=0; i<txRedeemers.len(); i+=1){
-    //   let redeemer = txRedeemers.get(i);
-    //   let units = redeemer.ex_units()
+    let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked()
+    // try {
+    //   console.log(builtTx.to_js_value().witness_set.redeemers!.map((x)=>x.ex_units))
+    // }catch {
+    //   console.log("No Redeemers")
     // }
-
     return new TxComplete(
       this.lucid,
-      this.txBuilder.build_for_evaluation(0, changeAddress).draft_tx(),
+      builtTx,
     )
   }
 
@@ -774,88 +781,88 @@ export class Tx {
   }
 }
 
-async function createPoolRegistration(
-  poolParams: PoolParams,
-  lucid: Lucid,
-): Promise<C.PoolRegistration> {
-  const poolOwners = C.Ed25519KeyHashes.new()
-  poolParams.owners.forEach((owner) => {
-    const { stakeCredential } = lucid.utils.getAddressDetails(owner)
-    if (stakeCredential?.type === 'Key') {
-      poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash))
-    } else throw new Error('Only key hashes allowed for pool owners.')
-  })
+// async function createPoolRegistration(
+//   poolParams: PoolParams,
+//   lucid: Lucid,
+// ): Promise<C.PoolRegistration> {
+//   const poolOwners = C.Ed25519KeyHashes.new()
+//   poolParams.owners.forEach((owner) => {
+//     const { stakeCredential } = lucid.utils.getAddressDetails(owner)
+//     if (stakeCredential?.type === 'Key') {
+//       poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash))
+//     } else throw new Error('Only key hashes allowed for pool owners.')
+//   })
 
-  const metadata = poolParams.metadataUrl
-    ? await fetch(poolParams.metadataUrl).then((res) => res.arrayBuffer())
-    : null
+//   const metadata = poolParams.metadataUrl
+//     ? await fetch(poolParams.metadataUrl).then((res) => res.arrayBuffer())
+//     : null
 
-  const metadataHash = metadata
-    ? C.PoolMetadataHash.from_bytes(C.hash_blake2b256(new Uint8Array(metadata)))
-    : null
+//   const metadataHash = metadata
+//     ? C.PoolMetadataHash.from_bytes(C.hash_blake2b256(new Uint8Array(metadata)))
+//     : null
 
-  const relays = C.Relays.new()
-  poolParams.relays.forEach((relay) => {
-    switch (relay.type) {
-      case 'SingleHostIp': {
-        const ipV4 = relay.ipV4
-          ? C.Ipv4.new(
-              new Uint8Array(relay.ipV4.split('.').map((b) => parseInt(b))),
-            )
-          : undefined
-        const ipV6 = relay.ipV6
-          ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(':', '')))
-          : undefined
-        relays.add(
-          C.Relay.new_single_host_addr(
-            C.SingleHostAddr.new(relay.port, ipV4, ipV6),
-          ),
-        )
-        break
-      }
-      case 'SingleHostDomainName': {
-        relays.add(
-          C.Relay.new_single_host_name(
-            C.SingleHostName.new(
-              relay.port,
-              C.DNSRecordAorAAAA.new(relay.domainName!),
-            ),
-          ),
-        )
-        break
-      }
-      case 'MultiHost': {
-        relays.add(
-          C.Relay.new_multi_host_name(
-            C.MultiHostName.new(C.DNSRecordSRV.new(relay.domainName!)),
-          ),
-        )
-        break
-      }
-    }
-  })
+//   const relays = C.Relays.new()
+//   poolParams.relays.forEach((relay) => {
+//     switch (relay.type) {
+//       case 'SingleHostIp': {
+//         const ipV4 = relay.ipV4
+//           ? C.Ipv4.new(
+//               new Uint8Array(relay.ipV4.split('.').map((b) => parseInt(b))),
+//             )
+//           : undefined
+//         const ipV6 = relay.ipV6
+//           ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(':', '')))
+//           : undefined
+//         relays.add(
+//           C.Relay.new_single_host_addr(
+//             C.SingleHostAddr.new(relay.port, ipV4, ipV6),
+//           ),
+//         )
+//         break
+//       }
+//       case 'SingleHostDomainName': {
+//         relays.add(
+//           C.Relay.new_single_host_name(
+//             C.SingleHostName.new(
+//               relay.port,
+//               C.DNSRecordAorAAAA.new(relay.domainName!),
+//             ),
+//           ),
+//         )
+//         break
+//       }
+//       case 'MultiHost': {
+//         relays.add(
+//           C.Relay.new_multi_host_name(
+//             C.MultiHostName.new(C.DNSRecordSRV.new(relay.domainName!)),
+//           ),
+//         )
+//         break
+//       }
+//     }
+//   })
 
-  return C.PoolRegistration.new(
-    C.PoolParams.new(
-      C.Ed25519KeyHash.from_bech32(poolParams.poolId),
-      C.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
-      C.BigNum.from_str(poolParams.pledge.toString()),
-      C.BigNum.from_str(poolParams.cost.toString()),
-      C.UnitInterval.new(
-        C.BigNum.from_str(poolParams.margin[0].toString()),
-        C.BigNum.from_str(poolParams.margin[1].toString()),
-      ),
-      C.RewardAddress.from_address(
-        addressFromWithNetworkCheck(poolParams.rewardAddress, lucid),
-      )!,
-      poolOwners,
-      relays,
-      metadataHash
-        ? C.PoolMetadata.new(C.URL.new(poolParams.metadataUrl!), metadataHash)
-        : undefined,
-    ),
-  )
-}
+//   return C.PoolRegistration.new(
+//     C.PoolParams.new(
+//       C.Ed25519KeyHash.from_bech32(poolParams.poolId),
+//       C.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
+//       C.BigNum.from_str(poolParams.pledge.toString()),
+//       C.BigNum.from_str(poolParams.cost.toString()),
+//       C.UnitInterval.new(
+//         C.BigNum.from_str(poolParams.margin[0].toString()),
+//         C.BigNum.from_str(poolParams.margin[1].toString()),
+//       ),
+//       C.RewardAddress.from_address(
+//         addressFromWithNetworkCheck(poolParams.rewardAddress, lucid),
+//       )!,
+//       poolOwners,
+//       relays,
+//       metadataHash
+//         ? C.PoolMetadata.new(C.URL.new(poolParams.metadataUrl!), metadataHash)
+//         : undefined,
+//     ),
+//   )
+// }
 
 function addressFromWithNetworkCheck(
   address: Address | RewardAddress,

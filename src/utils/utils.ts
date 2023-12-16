@@ -35,6 +35,7 @@ import {
   unixTimeToEnclosingSlot,
 } from '../plutus/time.ts'
 import { Data } from '../plutus/data.ts'
+import * as uplc from 'uplc'
 
 export class Utils {
   private lucid: Lucid
@@ -390,7 +391,7 @@ export function getAddressDetails(address: string): AddressDetails {
     return {
       type: 'Byron',
       // todo: fix!
-      networkId: 0,//parsedAddress.network_id(),
+      networkId: parsedAddress.to_address().network_id(),
       address: {
         bech32: '',
         hex: toHex(parsedAddress.to_address().to_bytes()),
@@ -513,9 +514,9 @@ export function toScriptRef(script: Script): C.ScriptRef {
     case 'PlutusV1':
       return C.ScriptRef.new(
         C.Script.new_plutus_v1(
-            C.PlutusV1Script.from_bytes(
-              fromHex(applyDoubleCborEncoding(script.script)),
-            ),
+          C.PlutusV1Script.from_bytes(
+            fromHex(applyDoubleCborEncoding(script.script)),
+          ),
         ),
       )
     case 'PlutusV2':
@@ -548,9 +549,7 @@ export function utxoToCore(utxo: UTxO): C.TransactionUnspentOutput {
   // inline datum
   if (!utxo.datumHash && utxo.datum) {
     output.set_datum(
-      C.Datum.new_data(
-        C.PlutusData.from_bytes(fromHex(utxo.datum)),
-      ),
+      C.Datum.new_data(C.PlutusData.from_bytes(fromHex(utxo.datum))),
     )
   }
 
@@ -601,17 +600,21 @@ export function networkToId(network: Network): number {
 }
 
 export function fromHex(hex: string): Uint8Array {
-  const matched = hex.match(/.{1,2}/g);
-  return new Uint8Array(matched ? matched.map(byte => parseInt(byte, 16)) : []);
+  const matched = hex.match(/.{1,2}/g)
+  return new Uint8Array(
+    matched ? matched.map((byte) => parseInt(byte, 16)) : [],
+  )
 }
 
 export function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map(byte => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 /** Convert a Hex encoded string to a Utf-8 encoded string. */
 export function toText(hex: string): string {
-  return new TextDecoder().decode(fromHex(hex));
+  return new TextDecoder().decode(fromHex(hex))
 }
 
 /** Convert a Utf-8 encoded string to a Hex encoded string. */
@@ -692,31 +695,62 @@ export function fromUnit(
  * It follows this Json format: https://github.com/input-output-hk/cardano-node/blob/master/doc/reference/simple-scripts.md
  */
 export function nativeScriptFromJson(nativeScript: NativeScript): Script {
+  console.log(JSON.stringify(nativeScript))
   return {
     type: 'Native',
     script: toHex(
-      C.encode_json_str_to_native_script(
-        JSON.stringify(nativeScript),
-        '',
-        C.ScriptSchema.Node,
-      ).to_bytes(),
+      doNativeScriptFromJSON(nativeScript).to_bytes(),
     ),
   }
 }
 
-// export function applyParamsToScript<T extends unknown[] = Data[]>(
-//   plutusScript: string,
-//   params: Exact<[...T]>,
-//   type?: T,
-// ): string {
-//   const p = (type ? Data.castTo<T>(params, type) : params) as Data[]
-//   return toHex(
-//     C.apply_params_to_plutus_script(
-//       C.PlutusList.from_bytes(fromHex(Data.to<Data[]>(p))),
-//       C.PlutusScript.from_bytes(fromHex(applyDoubleCborEncoding(plutusScript))),
-//     ).to_bytes(),
-//   )
-// }
+function doNativeScriptFromJSON(nativeScript: NativeScript): C.NativeScript {
+  if (nativeScript.type === 'sig') {
+    return C.NativeScript.new_script_pubkey(
+      C.ScriptPubkey.new(C.Ed25519KeyHash.from_hex(nativeScript.keyHash)),
+    )
+  } else if (nativeScript.type === 'all') {
+    const nativeScripts = C.NativeScripts.new()
+    for (const subScript of nativeScript.scripts) {
+      let subNativeScript = doNativeScriptFromJSON(subScript)
+      nativeScripts.add(subNativeScript);
+    }
+    return C.NativeScript.new_script_all(C.ScriptAll.new(nativeScripts))
+  } else if (nativeScript.type === 'any') {
+    const nativeScripts = C.NativeScripts.new()
+    for (const subScript of nativeScript.scripts) {
+      let subNativeScript = doNativeScriptFromJSON(subScript)
+      nativeScripts.add(subNativeScript);
+    }
+    return C.NativeScript.new_script_all(C.ScriptAny.new(nativeScripts))
+  } else if (nativeScript.type === 'before') {
+    return C.NativeScript.new_timelock_start(C.TimelockStart.new(C.BigNum.from_str(nativeScript.slot.toString())))
+  } else if (nativeScript.type === 'after') {
+    return C.NativeScript.new_timelock_expiry(C.TimelockExpiry.new(C.BigNum.from_str(nativeScript.slot.toString())))
+  } else if (nativeScript.type === 'atLeast') {
+    const nativeScripts = C.NativeScripts.new()
+    for (const subScript of nativeScript.scripts) {
+      let subNativeScript = doNativeScriptFromJSON(subScript)
+      nativeScripts.add(subNativeScript);
+    }
+    return C.NativeScript.new_script_n_of_k(C.ScriptNOfK.new(nativeScript.required, nativeScripts))
+  }
+  throw "No nativescript type variants matched"
+}
+
+export function applyParamsToScript<T extends unknown[] = Data[]>(
+  plutusScript: string,
+  params: Exact<[...T]>,
+  type?: T,
+): string {
+  const p = (type ? Data.castTo<T>(params, type) : params) as Data[]
+  return toHex(
+    uplc.apply_params_to_script(
+      fromHex(Data.to<Data[]>(p)),
+      fromHex(applyDoubleCborEncoding(plutusScript)),
+    ),
+  )
+}
 
 /** Returns double cbor encoded script. If script is already double cbor encoded it's returned as it is. */
 export function applyDoubleCborEncoding(script: string): string {

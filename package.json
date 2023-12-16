@@ -20,10 +20,11 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@dcspark/cardano-multiplatform-lib-browser": "^3.1.2",
+    "@dcspark/cardano-multiplatform-lib-nodejs": "^3.1.2",
     "@emurgo/cardano-message-signing-browser": "^1.0.1",
     "@sinclair/typebox": "^0.31.28",
     "fast-check": "^3.14.0",
-    "sha256": "^0.2.0"
+    "sha256": "^0.2.0",
+    "uplc": "file:uplc/pkg"
   }
 }
