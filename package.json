@@ -1,5 +1,5 @@
 {
-  "name": "lucid",
+  "name": "@butaneprotocol/translucent",
   "module": "index.ts",
   "type": "module",
   "devDependencies": {

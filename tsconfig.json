@@ -17,5 +17,6 @@
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "esModuleInterop": true
-  }
+  },
+  "exclude": ["node_modules"]
 }
