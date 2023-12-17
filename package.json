@@ -2,6 +2,9 @@
   "name": "@butaneprotocol/translucent",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "build:wasm": "cd ./uplc && wasm-pack build -t nodejs && cd .. && bun i"
+  },
   "devDependencies": {
     "bun-types": "latest",
     "@babel/core": "^7.23.0",
