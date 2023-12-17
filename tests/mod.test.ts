@@ -19,7 +19,6 @@ import {
   utxoToCore,
   valueToAssets,
 } from "../src/mod.ts";
-import {assert} from "./util.ts"
 import * as fc from "fast-check";
 
 const privateKey = C.PrivateKey.generate_ed25519().to_bech32();
@@ -67,7 +66,7 @@ it("PaymentKeyHash length", async () => {
   if (paymentCredential) {
     expect(fromHex(paymentCredential.hash).length).toEqual(28);
   } else {
-    assert(paymentCredential);
+    expect(paymentCredential).toBeDefined();
   }
 });
 
@@ -348,9 +347,9 @@ it("toLabel/fromLabel property test", () => {
       if (n < 0 || n > 65535) {
         try {
           fromLabel(toLabel(n));
-          assert(false);
+          expect(false).toBeFalsy();
         } catch (_e) {
-          assert(true);
+          expect(true).toBeTruthy();
         }
       } else {
         expect(n).toEqual(fromLabel(toLabel(n)));
