@@ -9,11 +9,10 @@ import {
   Label,
   Lovelace,
   MintingPolicy,
-  Network,
   OutputData,
   PaymentKeyHash,
   PoolId,
-  PoolParams,
+  ProtocolParameters,
   Redeemer,
   RewardAddress,
   SlotConfig,
@@ -28,11 +27,11 @@ import {
   createCostModels,
   fromHex,
   networkToId,
-  toHex,
+  PROTOCOL_PARAMETERS_DEFAULT,
   toScriptRef,
   utxoToCore,
 } from '../utils/mod.ts'
-import { applyDoubleCborEncoding, valueToAssets } from '../utils/utils.ts'
+import { applyDoubleCborEncoding, toHex } from '../utils/utils.ts'
 import { Lucid } from './lucid.ts'
 import { TxComplete } from './tx_complete.ts'
 import * as uplc from 'uplc'
@@ -818,7 +817,12 @@ export class Tx {
       0,
       changeAddress,
     )
-    const protocolParameters = await this.lucid.provider.getProtocolParameters()
+    let protocolParameters: ProtocolParameters
+    try {
+      protocolParameters = await this.lucid.provider.getProtocolParameters()
+    }catch{
+      protocolParameters = PROTOCOL_PARAMETERS_DEFAULT
+    }
     const costMdls = createCostModels(protocolParameters.costModels)
     const slotConfig: SlotConfig = SLOT_CONFIG_NETWORK[this.lucid.network]
     let draftTx = txRedeemerBuilder.draft_tx()
@@ -839,28 +843,6 @@ export class Tx {
         }
         let new_witnesses = draftTx.witness_set()
         new_witnesses.set_redeemers(newRedeemers)
-        // {
-        //   let reference_scripts: C.PlutusV2Script[] = Object.values(
-        //     this.scripts,
-        //   )
-        //     .filter((x) => {
-        //       if ('referenceScript' in x) {
-        //         return true
-        //       } else {
-        //         return false
-        //       }
-        //     })
-        //     .map(
-        //       (x) => 'referenceScript' in x && x.referenceScript,
-        //     ) as C.PlutusV2Script[]
-        //   let plutusv2scripts = new_witnesses.plutus_v2_scripts() || C.PlutusV2Scripts.new()
-        //   for (const x of reference_scripts) {
-        //     // let pv2 = C.PlutusV2Script.
-        //     console.log("Adding: ", x.hash().to_hex())
-        //     plutusv2scripts.add(x)
-        //   }
-        //   new_witnesses.set_plutus_v2_scripts(plutusv2scripts)
-        // }
         draftTx = C.Transaction.new(
           draftTx.body(),
           new_witnesses,
@@ -869,16 +851,6 @@ export class Tx {
       }
     }
     let draftTxBytes = draftTx.to_bytes()
-    //console.log('About to eval')
-    //console.log(Object.keys(this.scripts))
-    // Object.values(this.scripts).forEach((x) => {
-    //   if ('inlineScript' in x) {
-    //     console.log('inline: ', x.inlineScript.hash().to_hex())
-    //   } else {
-    //     console.log('ref: ', x.referenceScript.hash().to_hex())
-    //   }
-    // })
-    //console.log('pre uplc: ', draftTx.to_json())
     const uplcResults = uplc.eval_phase_two_raw(
       draftTxBytes,
       allUtxos.map((x) => x.input().to_bytes()),
@@ -890,14 +862,12 @@ export class Tx {
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
     )
-    //console.log('Done eval')
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes)
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
         redeemer.ex_units(),
       )
-      //console.log(redeemer.ex_units().to_json())
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked()
     return new TxComplete(this.lucid, builtTx)
@@ -905,99 +875,93 @@ export class Tx {
 
   /** Return the current transaction body in Hex encoded Cbor. */
   async toString(): Promise<string> {
-    let task = this.tasks.shift()
-    while (task) {
-      await task(this)
-      task = this.tasks.shift()
-    }
-
-    //return toHex(this.txBuilder);
-    return 'INCOMPLETE'
+    let complete = await this.complete();
+    return complete.toString();
   }
 }
 
-// async function createPoolRegistration(
-//   poolParams: PoolParams,
-//   lucid: Lucid,
-// ): Promise<C.PoolRegistration> {
-//   const poolOwners = C.Ed25519KeyHashes.new()
-//   poolParams.owners.forEach((owner) => {
-//     const { stakeCredential } = lucid.utils.getAddressDetails(owner)
-//     if (stakeCredential?.type === 'Key') {
-//       poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash))
-//     } else throw new Error('Only key hashes allowed for pool owners.')
-//   })
+async function createPoolRegistration(
+  poolParams: PoolParams,
+  lucid: Lucid,
+): Promise<C.PoolRegistration> {
+  const poolOwners = C.Ed25519KeyHashes.new()
+  poolParams.owners.forEach((owner) => {
+    const { stakeCredential } = lucid.utils.getAddressDetails(owner)
+    if (stakeCredential?.type === 'Key') {
+      poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash))
+    } else throw new Error('Only key hashes allowed for pool owners.')
+  })
 
-//   const metadata = poolParams.metadataUrl
-//     ? await fetch(poolParams.metadataUrl).then((res) => res.arrayBuffer())
-//     : null
+  const metadata = poolParams.metadataUrl
+    ? await fetch(poolParams.metadataUrl).then((res) => res.arrayBuffer())
+    : null
 
-//   const metadataHash = metadata
-//     ? C.PoolMetadataHash.from_bytes(C.hash_blake2b256(new Uint8Array(metadata)))
-//     : null
+  const metadataHash = metadata
+    ? C.PoolMetadataHash.from_bytes(C.hash_blake2b256(new Uint8Array(metadata)))
+    : null
 
-//   const relays = C.Relays.new()
-//   poolParams.relays.forEach((relay) => {
-//     switch (relay.type) {
-//       case 'SingleHostIp': {
-//         const ipV4 = relay.ipV4
-//           ? C.Ipv4.new(
-//               new Uint8Array(relay.ipV4.split('.').map((b) => parseInt(b))),
-//             )
-//           : undefined
-//         const ipV6 = relay.ipV6
-//           ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(':', '')))
-//           : undefined
-//         relays.add(
-//           C.Relay.new_single_host_addr(
-//             C.SingleHostAddr.new(relay.port, ipV4, ipV6),
-//           ),
-//         )
-//         break
-//       }
-//       case 'SingleHostDomainName': {
-//         relays.add(
-//           C.Relay.new_single_host_name(
-//             C.SingleHostName.new(
-//               relay.port,
-//               C.DNSRecordAorAAAA.new(relay.domainName!),
-//             ),
-//           ),
-//         )
-//         break
-//       }
-//       case 'MultiHost': {
-//         relays.add(
-//           C.Relay.new_multi_host_name(
-//             C.MultiHostName.new(C.DNSRecordSRV.new(relay.domainName!)),
-//           ),
-//         )
-//         break
-//       }
-//     }
-//   })
+  const relays = C.Relays.new()
+  poolParams.relays.forEach((relay) => {
+    switch (relay.type) {
+      case 'SingleHostIp': {
+        const ipV4 = relay.ipV4
+          ? C.Ipv4.new(
+              new Uint8Array(relay.ipV4.split('.').map((b) => parseInt(b))),
+            )
+          : undefined
+        const ipV6 = relay.ipV6
+          ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(':', '')))
+          : undefined
+        relays.add(
+          C.Relay.new_single_host_addr(
+            C.SingleHostAddr.new(relay.port, ipV4, ipV6),
+          ),
+        )
+        break
+      }
+      case 'SingleHostDomainName': {
+        relays.add(
+          C.Relay.new_single_host_name(
+            C.SingleHostName.new(
+              relay.port,
+              C.DNSRecordAorAAAA.new(relay.domainName!),
+            ),
+          ),
+        )
+        break
+      }
+      case 'MultiHost': {
+        relays.add(
+          C.Relay.new_multi_host_name(
+            C.MultiHostName.new(C.DNSRecordSRV.new(relay.domainName!)),
+          ),
+        )
+        break
+      }
+    }
+  })
 
-//   return C.PoolRegistration.new(
-//     C.PoolParams.new(
-//       C.Ed25519KeyHash.from_bech32(poolParams.poolId),
-//       C.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
-//       C.BigNum.from_str(poolParams.pledge.toString()),
-//       C.BigNum.from_str(poolParams.cost.toString()),
-//       C.UnitInterval.new(
-//         C.BigNum.from_str(poolParams.margin[0].toString()),
-//         C.BigNum.from_str(poolParams.margin[1].toString()),
-//       ),
-//       C.RewardAddress.from_address(
-//         addressFromWithNetworkCheck(poolParams.rewardAddress, lucid),
-//       )!,
-//       poolOwners,
-//       relays,
-//       metadataHash
-//         ? C.PoolMetadata.new(C.URL.new(poolParams.metadataUrl!), metadataHash)
-//         : undefined,
-//     ),
-//   )
-// }
+  return C.PoolRegistration.new(
+    C.PoolParams.new(
+      C.Ed25519KeyHash.from_bech32(poolParams.poolId),
+      C.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
+      C.BigNum.from_str(poolParams.pledge.toString()),
+      C.BigNum.from_str(poolParams.cost.toString()),
+      C.UnitInterval.new(
+        C.BigNum.from_str(poolParams.margin[0].toString()),
+        C.BigNum.from_str(poolParams.margin[1].toString()),
+      ),
+      C.RewardAddress.from_address(
+        addressFromWithNetworkCheck(poolParams.rewardAddress, lucid),
+      )!,
+      poolOwners,
+      relays,
+      metadataHash
+        ? C.PoolMetadata.new(C.URL.new(poolParams.metadataUrl!), metadataHash)
+        : undefined,
+    ),
+  )
+}
 
 function addressFromWithNetworkCheck(
   address: Address | RewardAddress,

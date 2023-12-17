@@ -5,3 +5,4 @@ dist
 deno.lock
 test.ts
 uplc/target
+.VSCodeCounter
