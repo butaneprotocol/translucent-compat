@@ -758,58 +758,13 @@ export class Tx {
           let new_redeemer = C.Redeemer.new(redeemer.tag(), redeemer.index(), redeemer.data(), C.ExUnits.new(C.BigNum.zero(), C.BigNum.zero()))
           newRedeemers.add(new_redeemer)
         }
-        let oldWitnessSet = draftTx.witness_set()
-        let newWitnessSet = C.TransactionWitnessSet.new()
-        {
-          let bootstraps = oldWitnessSet.bootstraps()
-          if (bootstraps){
-            newWitnessSet.set_bootstraps(bootstraps)
-          }
-        }
-        {
-          let native_scripts = oldWitnessSet.native_scripts()
-          if (native_scripts){
-            newWitnessSet.set_native_scripts(native_scripts)
-          }
-        }
-        {
-          let native_scripts = oldWitnessSet.plutus_data()
-          if (native_scripts){
-            newWitnessSet.set_plutus_data(native_scripts)
-          }
-        }
-        {
-          let native_scripts = oldWitnessSet.plutus_v1_scripts()
-          if (native_scripts){
-            newWitnessSet.set_plutus_v1_scripts(native_scripts)
-          }
-        }
-        {
-          let native_scripts = oldWitnessSet.plutus_v2_scripts()
-          if (native_scripts){
-            newWitnessSet.set_plutus_v2_scripts(native_scripts)
-          }
-        }
-        {
-          let native_scripts = oldWitnessSet.vkeys()
-          if (native_scripts){
-            newWitnessSet.set_vkeys(native_scripts)
-          }
-        }
-        newWitnessSet.set_redeemers(newRedeemers)
-        let newDraftTx = C.Transaction.new(draftTx.body(), newWitnessSet, draftTx.auxiliary_data())
-        draftTx = newDraftTx
+        let new_witnessses = draftTx.witness_set()
+        new_witnessses.set_redeemers(newRedeemers)
+        draftTx = C.Transaction.new(draftTx.body(), new_witnessses, draftTx.auxiliary_data())
       }
     }
     let draftTxBytes = draftTx.to_bytes()
-    console.log("preeval")
-    let goodTx = "84a800828258209163a1bc1b08f29e3b9108da68e05cad8069f1cfc1724ab1746981359e995d8102825820db9ec2ee712a47a4367af05de5c683420234c53324a8f4b33c4bf88a99ec17b90201858358391100fb107bfbd51b3a5638867d3688e986ba38ff34fb738f5bd42b20d5111e9a698b7f8d63031e4ec827564e2912ad23d91c2e048b99f21c08821a002d0370a1581ca2944573e99d2ed3055b808eaa264f0bf119e01fc6b18863067c63e4a1444d454c441b000000024ed4945e5820be4417a774de7c4f5439640c7077c1ea10e095b1e8df4b7871efad3b4658985d82583901319723758f305d3171048358d7600d64912d6e83cd270055ec755070b4d98a7195aad84d4b76a6cd261edae312802acd4b0090c24d03b65a1a001504e282583901f81732bd387a2e74e7c402bf2bcbd7c075720deea0c79c2286964f323aa15728060a5ce8792e845c4f2ff31e60392ff64fa266af76d92c221a0234a63f82583901f81732bd387a2e74e7c402bf2bcbd7c075720deea0c79c2286964f323aa15728060a5ce8792e845c4f2ff31e60392ff64fa266af76d92c221a011bd88b82583901f81732bd387a2e74e7c402bf2bcbd7c075720deea0c79c2286964f323aa15728060a5ce8792e845c4f2ff31e60392ff64fa266af76d92c221a011bd88a021a00030ad5031a06a173a305a1581de13aa15728060a5ce8792e845c4f2ff31e60392ff64fa266af76d92c221943aa07582080e6cfe9a396cf414e4fcef28eb7109bf64d5280bbf807510fe5dae2400aa51a08000b58202ada7ab59be6f5ca9b04939af12d799ca850f42283a623d438457f3df7b67026a200828258202fb44047816129b824b152b9087f2f5d4bb26bfbf71422b0f84b3039b9c24d7b5840ee55a8c2e050b68b8bf4f35692adb55171d8482a326332d9903d758309a44f62bd32817dafd7734fee68364b690a8574493d64f01738a3d88fe02f12d88a3d0c8258201626296d7081c81b4db2caca3f653622dc87b9caa3c5f2adbc82e286d8598b86584096370e0d2b6747de9caeee52812c031340209b28bf2063fafa5081b39a0f2febcc515b2839d2b773933849981e7cf0a36746808c84fe91a544110326ed0ca70a049fd8799fd8799fd8799fd8799f581cf81732bd387a2e74e7c402bf2bcbd7c075720deea0c79c2286964f32ffd8799fd8799fd8799f581c3aa15728060a5ce8792e845c4f2ff31e60392ff64fa266af76d92c22ffffffff4040581ca2944573e99d2ed3055b808eaa264f0bf119e01fc6b18863067c63e4444d454c441a0fdf3457d879801a00286f90fffffff5a11902a2a1636d73678178264d7565736c69737761705f76323a205377617020526571756573742076696120457465726e6c"
-    let goodTransaction = C.Transaction.from_bytes(fromHex(goodTx))
-    console.log("goodTx: ", goodTransaction.to_json())
-    console.log("draftTx: ", draftTx.to_json())
-    let uplcResults:  Uint8Array[]
-    try {
-    uplcResults = uplc.eval_phase_two_raw(
+    const uplcResults = uplc.eval_phase_two_raw(
       draftTxBytes,
       allUtxos.map((x) => x.input().to_bytes()),
       allUtxos.map((x) => x.output().to_bytes()),
@@ -820,11 +775,6 @@ export class Tx {
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
     )
-    } catch(e) {
-      console.log("EVAL ERROR")
-      throw e
-    }
-    console.log("posteval")
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes)
       this.txBuilder.set_exunits(
@@ -833,13 +783,7 @@ export class Tx {
       )
       console.log(redeemer.ex_units().to_json())
     }
-    console.log("prebuild")
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked()
-    // try {
-    //   console.log(builtTx.to_js_value().witness_set.redeemers!.map((x)=>x.ex_units))
-    // }catch {
-    //   console.log("No Redeemers")
-    // }
     return new TxComplete(
       this.lucid,
       builtTx,

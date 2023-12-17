@@ -805,6 +805,8 @@ checksum = "e51733f11c9c4f72aa0c160008246859e340b00807569a0da0e7a1079b27ba85"
 [[package]]
 name = "uplc"
 version = "1.0.20-alpha"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc043e5649db68d6af33f2cb8e96db66c5cf9b459b95e0b24489a34b3c79589"
 dependencies = [
  "anyhow",
  "cryptoxide",
@@ -831,7 +833,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
- "wasm-bindgen",
 ]
 
 [[package]]
