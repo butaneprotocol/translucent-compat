@@ -28,6 +28,6 @@
     "@sinclair/typebox": "^0.31.28",
     "fast-check": "^3.14.0",
     "sha256": "^0.2.0",
-    "uplc": "file:uplc/pkg"
+    "uplc": "file:./uplc/pkg"
   }
 }

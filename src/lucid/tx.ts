@@ -38,11 +38,15 @@ import { TxComplete } from './tx_complete.ts'
 import * as uplc from 'uplc'
 import { SLOT_CONFIG_NETWORK } from '../plutus/time.ts'
 
+type ScriptOrRef =
+  | { inlineScript: C.PlutusScript }
+  | { referenceScript: C.PlutusV2Script }
+
 export class Tx {
   txBuilder: C.TransactionBuilder
 
   /* TODO: Add new tasks list so order of attachScript doesn't matter  */
-  private scripts: Record<string, C.PlutusScript>
+  private scripts: Record<string, ScriptOrRef>
   private native_scripts: Record<string, C.NativeScript>
   /** Stores the tx instructions, which get executed after calling .complete() */
   private tasks: ((that: Tx) => unknown)[]
@@ -50,6 +54,7 @@ export class Tx {
   private lucid: Lucid
 
   private UTxOs: C.TransactionUnspentOutput[] = []
+  private referencedUTxOs: C.TransactionUnspentOutput[] = []
 
   constructor(lucid: Lucid) {
     this.lucid = lucid
@@ -62,7 +67,7 @@ export class Tx {
 
   /** Read data from utxos. These utxos are only referenced and not spent. */
   readFrom(utxos: UTxO[]): Tx {
-    this.tasks.push(async (that) => {
+    this.earlyTasks.push(async (that) => {
       for (const utxo of utxos) {
         if (utxo.datumHash) {
           throw 'Reference hash not supported'
@@ -72,6 +77,19 @@ export class Tx {
           // that.txBuilder.add_plutus_data(plutusData);
         }
         const coreUtxo = utxoToCore(utxo)
+        {
+          let scriptRef = coreUtxo.output().script_ref()
+          if (scriptRef) {
+            let script = scriptRef.script()
+            if (!script.as_plutus_v2()) {
+              throw "Reference script wasn't V2 compatible"
+            }
+            this.scripts[script.hash().to_hex()] = {
+              referenceScript: script.as_plutus_v2()!,
+            }
+          }
+        }
+        this.referencedUTxOs.push(coreUtxo)
         that.txBuilder.add_reference_input(coreUtxo)
       }
     })
@@ -95,27 +113,41 @@ export class Tx {
           coreUtxo.output(),
         )
         let mr: C.InputBuilderResult
-        if (redeemer) {
-          let scriptHash = coreUtxo
-            .output()
-            .address()
-            .payment_cred()
-            ?.to_scripthash()
-            ?.to_hex()
-            .toString()!
+        let address = coreUtxo.output().address()
+        let paymentCredential = address.payment_cred()
+        if (redeemer && paymentCredential?.to_scripthash()) {
+          let paymentCredential = address.payment_cred()
+          if (!paymentCredential) {
+            throw 'Address has no payment credential'
+          }
+          if (!paymentCredential.to_scripthash()) {
+            throw "Address isn't a scripthash but has a redeemer"
+          }
+          let scriptHash = paymentCredential.to_scripthash()!.to_hex()
           let script = this.scripts[scriptHash]
           if (!script) {
             throw 'Script was not attached for UTxO spend'
           }
           let datum = coreUtxo.output().datum()?.as_inline_data()
-          mr = inputBuilder.plutus_script(
-            C.PartialPlutusWitness.new(
-              C.PlutusScriptWitness.from_script(script),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
-            ),
-            C.Ed25519KeyHashes.new(),
-            datum!,
-          )
+          if ('inlineScript' in script) {
+            mr = inputBuilder.plutus_script(
+              C.PartialPlutusWitness.new(
+                C.PlutusScriptWitness.from_script(script.inlineScript),
+                C.PlutusData.from_bytes(fromHex(redeemer)),
+              ),
+              C.Ed25519KeyHashes.new(),
+              datum!,
+            )
+          } else {
+            mr = inputBuilder.plutus_script(
+              C.PartialPlutusWitness.new(
+                C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
+                C.PlutusData.from_bytes(fromHex(redeemer)),
+              ),
+              C.Ed25519KeyHashes.new(),
+              datum!,
+            )
+          }
         } else {
           let payCred = coreUtxo.output().address().payment_cred()
           if (payCred?.kind() == 0) {
@@ -166,13 +198,23 @@ export class Tx {
         if (!script) {
           throw 'Scripts must be attached BEFORE they are used'
         }
-        mr = mintBuilder.plutus_script(
-          C.PartialPlutusWitness.new(
-            C.PlutusScriptWitness.from_script(script),
-            C.PlutusData.from_bytes(fromHex(redeemer)),
-          ),
-          C.Ed25519KeyHashes.new(),
-        )
+        if ('inlineScript' in script) {
+          mr = mintBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_script(script.inlineScript),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        } else {
+          mr = mintBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        }
       } else {
         let ns = this.native_scripts[policyId]
         if (!ns) {
@@ -219,14 +261,13 @@ export class Tx {
           'Not allowed to set hash, asHash and inline at the same time.',
         )
       }
-      let outputBuilder = C.TransactionOutputBuilder.new();
+      let outputBuilder = C.TransactionOutputBuilder.new()
 
       // const output = C.TransactionOutput.new(
       //   addressFromWithNetworkCheck(address, that.lucid),
       //   assetsToValue(assets),
       // )
       let outputAddress = addressFromWithNetworkCheck(address, that.lucid)
-      console.log("output address: ", outputAddress.to_json())
       outputBuilder = outputBuilder.with_address(outputAddress)
 
       if (outputData.hash) {
@@ -249,11 +290,13 @@ export class Tx {
         outputBuilder = outputBuilder.with_reference_script(toScriptRef(script))
       }
       let valueBuilder = outputBuilder.next()
-      //valueBuilder.with_asset_and_min_required_coin()
-      valueBuilder = valueBuilder.with_value(assetsToValue(assets))
+      // todo: min coin
+      let assetsC = assetsToValue(assets)
+      if (BigInt(assetsC.coin().to_str()) < 90000000n) {
+        assetsC.set_coin(C.BigNum.from_str('90000000'))
+      }
+      valueBuilder = valueBuilder.with_value(assetsC)
       let output = valueBuilder.build()
-    
-
       that.txBuilder.add_output(output)
     })
     return this
@@ -316,13 +359,23 @@ export class Tx {
         if (!script) {
           throw 'Scripts must be attached BEFORE they are used'
         }
-        cr = certBuilder.plutus_script(
-          C.PartialPlutusWitness.new(
-            C.PlutusScriptWitness.from_script(script),
-            C.PlutusData.from_bytes(fromHex(redeemer)),
-          ),
-          C.Ed25519KeyHashes.new(),
-        )
+        if ('inlineScript' in script) {
+          cr = certBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_script(script.inlineScript),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        } else {
+          cr = certBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        }
       } else {
         if (credential.kind() == 0) {
           cr = certBuilder.payment_key()
@@ -408,13 +461,23 @@ export class Tx {
         if (!script) {
           throw 'Scripts must be attached BEFORE they are used'
         }
-        cr = certBuilder.plutus_script(
-          C.PartialPlutusWitness.new(
-            C.PlutusScriptWitness.from_script(script),
-            C.PlutusData.from_bytes(fromHex(redeemer)),
-          ),
-          C.Ed25519KeyHashes.new(),
-        )
+        if ('inlineScript' in script) {
+          cr = certBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_script(script.inlineScript),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        } else {
+          cr = certBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        }
       } else {
         if (credential.kind() == 0) {
           cr = certBuilder.payment_key()
@@ -503,13 +566,23 @@ export class Tx {
         if (!script) {
           throw 'Scripts must be attached BEFORE they are used'
         }
-        wr = certBuilder.plutus_script(
-          C.PartialPlutusWitness.new(
-            C.PlutusScriptWitness.from_script(script),
-            C.PlutusData.from_bytes(fromHex(redeemer)),
-          ),
-          C.Ed25519KeyHashes.new(),
-        )
+        if ('inlineScript' in script) {
+          wr = certBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_script(script.inlineScript),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        } else {
+          wr = certBuilder.plutus_script(
+            C.PartialPlutusWitness.new(
+              C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
+              C.PlutusData.from_bytes(fromHex(redeemer)),
+            ),
+            C.Ed25519KeyHashes.new(),
+          )
+        }
       } else {
         if (rewAdd.payment_cred().kind() == 0) {
           wr = certBuilder.payment_key()
@@ -683,7 +756,8 @@ export class Tx {
           C.PlutusV2Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
         )
       }
-      this.scripts[ps.hash().to_hex()] = ps
+      console.log('Adding script: ', ps.hash().to_hex().toString())
+      this.scripts[ps.hash().to_hex().toString()] = { inlineScript: ps }
     } else {
       throw new Error('No variant matched.')
     }
@@ -728,7 +802,7 @@ export class Tx {
     for (let i = 0; i < rawWalletUTxOs.len(); i++) {
       walletUTxOs.push(rawWalletUTxOs.get(i))
     }
-    let allUtxos = [...this.UTxOs, ...walletUTxOs]
+    let allUtxos = [...this.UTxOs, ...walletUTxOs, ...this.referencedUTxOs]
 
     const changeAddress: C.Address = addressFromWithNetworkCheck(
       options?.change?.address || (await this.lucid.wallet.address()),
@@ -739,7 +813,7 @@ export class Tx {
         C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
       )
     }
-    this.txBuilder.select_utxos(3)
+    this.txBuilder.select_utxos(2)
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
       0,
       changeAddress,
@@ -750,20 +824,61 @@ export class Tx {
     let draftTx = txRedeemerBuilder.draft_tx()
     {
       let redeemers = draftTx.witness_set().redeemers()
-      
-      if (redeemers){
+
+      if (redeemers) {
         let newRedeemers = C.Redeemers.new()
-        for (let i = 0; i<redeemers!.len(); i++){
+        for (let i = 0; i < redeemers!.len(); i++) {
           let redeemer = redeemers.get(i)
-          let new_redeemer = C.Redeemer.new(redeemer.tag(), redeemer.index(), redeemer.data(), C.ExUnits.new(C.BigNum.zero(), C.BigNum.zero()))
+          let new_redeemer = C.Redeemer.new(
+            redeemer.tag(),
+            redeemer.index(),
+            redeemer.data(),
+            C.ExUnits.new(C.BigNum.zero(), C.BigNum.zero()),
+          )
           newRedeemers.add(new_redeemer)
         }
-        let new_witnessses = draftTx.witness_set()
-        new_witnessses.set_redeemers(newRedeemers)
-        draftTx = C.Transaction.new(draftTx.body(), new_witnessses, draftTx.auxiliary_data())
+        let new_witnesses = draftTx.witness_set()
+        new_witnesses.set_redeemers(newRedeemers)
+        // {
+        //   let reference_scripts: C.PlutusV2Script[] = Object.values(
+        //     this.scripts,
+        //   )
+        //     .filter((x) => {
+        //       if ('referenceScript' in x) {
+        //         return true
+        //       } else {
+        //         return false
+        //       }
+        //     })
+        //     .map(
+        //       (x) => 'referenceScript' in x && x.referenceScript,
+        //     ) as C.PlutusV2Script[]
+        //   let plutusv2scripts = new_witnesses.plutus_v2_scripts() || C.PlutusV2Scripts.new()
+        //   for (const x of reference_scripts) {
+        //     // let pv2 = C.PlutusV2Script.
+        //     console.log("Adding: ", x.hash().to_hex())
+        //     plutusv2scripts.add(x)
+        //   }
+        //   new_witnesses.set_plutus_v2_scripts(plutusv2scripts)
+        // }
+        draftTx = C.Transaction.new(
+          draftTx.body(),
+          new_witnesses,
+          draftTx.auxiliary_data(),
+        )
       }
     }
     let draftTxBytes = draftTx.to_bytes()
+    //console.log('About to eval')
+    //console.log(Object.keys(this.scripts))
+    // Object.values(this.scripts).forEach((x) => {
+    //   if ('inlineScript' in x) {
+    //     console.log('inline: ', x.inlineScript.hash().to_hex())
+    //   } else {
+    //     console.log('ref: ', x.referenceScript.hash().to_hex())
+    //   }
+    // })
+    //console.log('pre uplc: ', draftTx.to_json())
     const uplcResults = uplc.eval_phase_two_raw(
       draftTxBytes,
       allUtxos.map((x) => x.input().to_bytes()),
@@ -775,19 +890,17 @@ export class Tx {
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
     )
+    //console.log('Done eval')
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes)
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
         redeemer.ex_units(),
       )
-      console.log(redeemer.ex_units().to_json())
+      //console.log(redeemer.ex_units().to_json())
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked()
-    return new TxComplete(
-      this.lucid,
-      builtTx,
-    )
+    return new TxComplete(this.lucid, builtTx)
   }
 
   /** Return the current transaction body in Hex encoded Cbor. */

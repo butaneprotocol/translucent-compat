@@ -746,8 +746,8 @@ export function applyParamsToScript<T extends unknown[] = Data[]>(
   const p = (type ? Data.castTo<T>(params, type) : params) as Data[]
   return toHex(
     uplc.apply_params_to_script(
-      fromHex(Data.to<Data[]>(p)),
-      fromHex(applyDoubleCborEncoding(plutusScript)),
+      fromHex(Data.to(p)),
+      fromHex(plutusScript),
     ),
   )
 }

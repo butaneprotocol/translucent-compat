@@ -50,7 +50,6 @@ import { Translucent } from "https://unpkg.com/translucent-cardano@0.10.7/web/mo
 ### Examples
 
 - [Basic examples](./src/examples/)
-- [Next.js Blockfrost Proxy API Example](https://github.com/GGAlanSmithee/cardano-translucent-blockfrost-proxy-example)
 
 ### Basic usage
 
