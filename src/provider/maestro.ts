@@ -267,7 +267,7 @@ export class Maestro implements Provider {
   }
 
   private commonHeaders() {
-    return { "api-key": this.apiKey, lucid };
+    return { "api-key": this.apiKey, translucent };
   }
 
   private maestroUtxoToUtxo(result: MaestroUtxo): UTxO {

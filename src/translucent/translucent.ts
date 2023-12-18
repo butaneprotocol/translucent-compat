@@ -41,31 +41,31 @@ import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
 import { Constr, Data } from "../plutus/data.ts";
 import { Emulator } from "../provider/emulator.ts";
 
-export class Lucid {
+export class Translucent {
   txBuilderConfig!: C.TransactionBuilderConfig;
   wallet!: Wallet;
   provider!: Provider;
   network: Network = "Mainnet";
   utils!: Utils;
 
-  static async new(provider?: Provider, network?: Network): Promise<Lucid> {
-    const lucid = new this();
-    if (network) lucid.network = network;
+  static async new(provider?: Provider, network?: Network): Promise<Translucent> {
+    const translucent = new this();
+    if (network) translucent.network = network;
     if (provider) {
-      lucid.provider = provider;
+      translucent.provider = provider;
       const protocolParameters = await provider.getProtocolParameters();
 
-      if (lucid.provider instanceof Emulator) {
-        lucid.network = "Custom";
-        SLOT_CONFIG_NETWORK[lucid.network] = {
-          zeroTime: lucid.provider.now(),
+      if (translucent.provider instanceof Emulator) {
+        translucent.network = "Custom";
+        SLOT_CONFIG_NETWORK[translucent.network] = {
+          zeroTime: translucent.provider.now(),
           zeroSlot: 0,
           slotLength: 1000,
         };
       }
 
-      const slotConfig = SLOT_CONFIG_NETWORK[lucid.network];
-      lucid.txBuilderConfig = C.TransactionBuilderConfigBuilder.new()
+      const slotConfig = SLOT_CONFIG_NETWORK[translucent.network];
+      translucent.txBuilderConfig = C.TransactionBuilderConfigBuilder.new()
         .coins_per_utxo_byte(
           C.BigNum.from_str(protocolParameters.coinsPerUtxoByte.toString()),
         )
@@ -92,26 +92,26 @@ export class Lucid {
         .costmdls(createCostModels(protocolParameters.costModels))
         .build();
     }
-    lucid.utils = new Utils(lucid);
-    return lucid;
+    translucent.utils = new Utils(translucent);
+    return translucent;
   }
 
   /**
    * Switch provider and/or network.
    * If provider or network unset, no overwriting happens. Provider or network from current instance are taken then.
    */
-  async switchProvider(provider?: Provider, network?: Network): Promise<Lucid> {
+  async switchProvider(provider?: Provider, network?: Network): Promise<Translucent> {
     if (this.network === "Custom") {
       throw new Error("Cannot switch when on custom network.");
     }
-    const lucid = await Lucid.new(
+    const translucent = await Translucent.new(
       provider,
       network,
     );
-    this.txBuilderConfig = lucid.txBuilderConfig;
+    this.txBuilderConfig = translucent.txBuilderConfig;
     this.provider = provider || this.provider;
     this.network = network || this.network;
-    this.wallet = lucid.wallet;
+    this.wallet = translucent.wallet;
     return this;
   }
 
@@ -206,7 +206,7 @@ export class Lucid {
    * Cardano Private key in bech32; not the BIP32 private key or any key that is not fully derived.
    * Only an Enteprise address (without stake credential) is derived.
    */
-  selectWalletFromPrivateKey(privateKey: PrivateKey): Lucid {
+  selectWalletFromPrivateKey(privateKey: PrivateKey): Translucent {
     const priv = C.PrivateKey.from_bech32(privateKey);
     const pubKeyHash = priv.to_public().hash();
 
@@ -276,7 +276,7 @@ export class Lucid {
     return this;
   }
 
-  selectWallet(api: WalletApi): Lucid {
+  selectWallet(api: WalletApi): Translucent {
     const getAddressHex = async () => {
       const [addressHex] = await api.getUsedAddresses();
       if (addressHex) return addressHex;
@@ -353,7 +353,7 @@ export class Lucid {
     address,
     utxos,
     rewardAddress,
-  }: ExternalWallet): Lucid {
+  }: ExternalWallet): Translucent {
     const addressDetails = this.utils.getAddressDetails(address);
     this.wallet = {
       // deno-lint-ignore require-await
@@ -428,7 +428,7 @@ export class Lucid {
       accountIndex?: number;
       password?: string;
     },
-  ): Lucid {
+  ): Translucent {
     const { address, rewardAddress, paymentKey, stakeKey } = walletFromSeed(
       seed,
       {

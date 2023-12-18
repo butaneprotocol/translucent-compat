@@ -26,7 +26,7 @@ import {
   Validator,
   WithdrawalValidator,
 } from '../types/mod.ts'
-import { Lucid } from '../lucid/mod.ts'
+import { Translucent } from '../translucent/mod.ts'
 import { generateMnemonic } from '../misc/bip39.ts'
 import { crc8 } from '../misc/crc8.ts'
 import {
@@ -38,9 +38,9 @@ import { Data } from '../plutus/data.ts'
 import * as uplc from 'uplc'
 
 export class Utils {
-  private lucid: Lucid
-  constructor(lucid: Lucid) {
-    this.lucid = lucid
+  private translucent: Translucent
+  constructor(translucent: Translucent) {
+    this.translucent = translucent
   }
 
   validatorToAddress(
@@ -50,7 +50,7 @@ export class Utils {
     const validatorHash = this.validatorToScriptHash(validator)
     if (stakeCredential) {
       return C.BaseAddress.new(
-        networkToId(this.lucid.network),
+        networkToId(this.translucent.network),
         C.StakeCredential.from_scripthash(C.ScriptHash.from_hex(validatorHash)),
         stakeCredential.type === 'Key'
           ? C.StakeCredential.from_keyhash(
@@ -64,7 +64,7 @@ export class Utils {
         .to_bech32(undefined)
     } else {
       return C.EnterpriseAddress.new(
-        networkToId(this.lucid.network),
+        networkToId(this.translucent.network),
         C.StakeCredential.from_scripthash(C.ScriptHash.from_hex(validatorHash)),
       )
         .to_address()
@@ -78,7 +78,7 @@ export class Utils {
   ): Address {
     if (stakeCredential) {
       return C.BaseAddress.new(
-        networkToId(this.lucid.network),
+        networkToId(this.translucent.network),
         paymentCredential.type === 'Key'
           ? C.StakeCredential.from_keyhash(
               C.Ed25519KeyHash.from_hex(paymentCredential.hash),
@@ -98,7 +98,7 @@ export class Utils {
         .to_bech32(undefined)
     } else {
       return C.EnterpriseAddress.new(
-        networkToId(this.lucid.network),
+        networkToId(this.translucent.network),
         paymentCredential.type === 'Key'
           ? C.StakeCredential.from_keyhash(
               C.Ed25519KeyHash.from_hex(paymentCredential.hash),
@@ -117,7 +117,7 @@ export class Utils {
   ): RewardAddress {
     const validatorHash = this.validatorToScriptHash(validator)
     return C.RewardAddress.new(
-      networkToId(this.lucid.network),
+      networkToId(this.translucent.network),
       C.StakeCredential.from_scripthash(C.ScriptHash.from_hex(validatorHash)),
     )
       .to_address()
@@ -126,7 +126,7 @@ export class Utils {
 
   credentialToRewardAddress(stakeCredential: Credential): RewardAddress {
     return C.RewardAddress.new(
-      networkToId(this.lucid.network),
+      networkToId(this.translucent.network),
       stakeCredential.type === 'Key'
         ? C.StakeCredential.from_keyhash(
             C.Ed25519KeyHash.from_hex(stakeCredential.hash),
@@ -199,12 +199,12 @@ export class Utils {
   unixTimeToSlot(unixTime: UnixTime): Slot {
     return unixTimeToEnclosingSlot(
       unixTime,
-      SLOT_CONFIG_NETWORK[this.lucid.network],
+      SLOT_CONFIG_NETWORK[this.translucent.network],
     )
   }
 
   slotToUnixTime(slot: Slot): UnixTime {
-    return slotToBeginUnixTime(slot, SLOT_CONFIG_NETWORK[this.lucid.network])
+    return slotToBeginUnixTime(slot, SLOT_CONFIG_NETWORK[this.translucent.network])
   }
 
   /** Address can be in Bech32 or Hex. */

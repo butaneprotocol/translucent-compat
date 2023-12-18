@@ -28,7 +28,7 @@ export class Blockfrost implements Provider {
 
   async getProtocolParameters(): Promise<ProtocolParameters> {
     const result = await fetch(`${this.url}/epochs/latest/parameters`, {
-      headers: { project_id: this.projectId, lucid },
+      headers: { project_id: this.projectId, translucent },
     }).then((res) => res.json());
 
     return {
@@ -67,7 +67,7 @@ export class Blockfrost implements Provider {
       const pageResult: BlockfrostUtxoResult | BlockfrostUtxoError =
         await fetch(
           `${this.url}/addresses/${queryPredicate}/utxos?page=${page}`,
-          { headers: { project_id: this.projectId, lucid } },
+          { headers: { project_id: this.projectId, translucent } },
         ).then((res) => res.json());
       if ((pageResult as BlockfrostUtxoError).error) {
         if ((pageResult as BlockfrostUtxoError).status_code === 404) {
@@ -105,7 +105,7 @@ export class Blockfrost implements Provider {
       const pageResult: BlockfrostUtxoResult | BlockfrostUtxoError =
         await fetch(
           `${this.url}/addresses/${queryPredicate}/utxos/${unit}?page=${page}`,
-          { headers: { project_id: this.projectId, lucid } },
+          { headers: { project_id: this.projectId, translucent } },
         ).then((res) => res.json());
       if ((pageResult as BlockfrostUtxoError).error) {
         if ((pageResult as BlockfrostUtxoError).status_code === 404) {
@@ -125,7 +125,7 @@ export class Blockfrost implements Provider {
   async getUtxoByUnit(unit: Unit): Promise<UTxO> {
     const addresses = await fetch(
       `${this.url}/assets/${unit}/addresses?count=2`,
-      { headers: { project_id: this.projectId, lucid } },
+      { headers: { project_id: this.projectId, translucent } },
     ).then((res) => res.json());
 
     if (!addresses || addresses.error) {
@@ -152,7 +152,7 @@ export class Blockfrost implements Provider {
     const utxos = await Promise.all(queryHashes.map(async (txHash) => {
       const result = await fetch(
         `${this.url}/txs/${txHash}/utxos`,
-        { headers: { project_id: this.projectId, lucid } },
+        { headers: { project_id: this.projectId, translucent } },
       ).then((res) => res.json());
       if (!result || result.error) {
         return [];
@@ -177,7 +177,7 @@ export class Blockfrost implements Provider {
   async getDelegation(rewardAddress: RewardAddress): Promise<Delegation> {
     const result = await fetch(
       `${this.url}/accounts/${rewardAddress}`,
-      { headers: { project_id: this.projectId, lucid } },
+      { headers: { project_id: this.projectId, translucent } },
     ).then((res) => res.json());
     if (!result || result.error) {
       return { poolId: null, rewards: 0n };
@@ -192,7 +192,7 @@ export class Blockfrost implements Provider {
     const datum = await fetch(
       `${this.url}/scripts/datum/${datumHash}/cbor`,
       {
-        headers: { project_id: this.projectId, lucid },
+        headers: { project_id: this.projectId, translucent },
       },
     )
       .then((res) => res.json())
@@ -207,7 +207,7 @@ export class Blockfrost implements Provider {
     return new Promise((res) => {
       const confirmation = setInterval(async () => {
         const isConfirmed = await fetch(`${this.url}/txs/${txHash}`, {
-          headers: { project_id: this.projectId, lucid },
+          headers: { project_id: this.projectId, translucent },
         }).then((res) => res.json());
         if (isConfirmed && !isConfirmed.error) {
           clearInterval(confirmation);
@@ -224,7 +224,7 @@ export class Blockfrost implements Provider {
       headers: {
         "Content-Type": "application/cbor",
         project_id: this.projectId,
-        lucid,
+        translucent,
       },
       body: fromHex(tx),
     }).then((res) => res.json());
@@ -255,7 +255,7 @@ export class Blockfrost implements Provider {
             } = await fetch(
               `${this.url}/scripts/${r.reference_script_hash}`,
               {
-                headers: { project_id: this.projectId, lucid },
+                headers: { project_id: this.projectId, translucent },
               },
             ).then((res) => res.json());
             // TODO: support native scripts
@@ -264,7 +264,7 @@ export class Blockfrost implements Provider {
             }
             const { cbor: script } = await fetch(
               `${this.url}/scripts/${r.reference_script_hash}/cbor`,
-              { headers: { project_id: this.projectId, lucid } },
+              { headers: { project_id: this.projectId, translucent } },
             ).then((res) => res.json());
             return {
               type: type === "plutusV1" ? "PlutusV1" : "PlutusV2",
@@ -341,4 +341,4 @@ type BlockfrostUtxoError = {
   error: unknown;
 };
 
-const lucid = packageJson.version; // Lucid version
+const translucent = packageJson.version; // Translucent version

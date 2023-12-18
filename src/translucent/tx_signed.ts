@@ -1,18 +1,18 @@
 import { C } from "../core/mod.ts";
 import { Transaction, TxHash } from "../types/mod.ts";
-import { Lucid } from "./lucid.ts";
+import { Translucent } from "./translucent.ts";
 import { toHex } from "../utils/mod.ts";
 
 export class TxSigned {
   txSigned: C.Transaction;
-  private lucid: Lucid;
-  constructor(lucid: Lucid, tx: C.Transaction) {
-    this.lucid = lucid;
+  private translucent: Translucent;
+  constructor(translucent: Translucent, tx: C.Transaction) {
+    this.translucent = translucent;
     this.txSigned = tx;
   }
 
   async submit(): Promise<TxHash> {
-    return await (this.lucid.wallet || this.lucid.provider).submitTx(
+    return await (this.translucent.wallet || this.translucent.provider).submitTx(
       toHex(this.txSigned.to_bytes()),
     );
   }

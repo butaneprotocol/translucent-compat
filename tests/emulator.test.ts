@@ -5,7 +5,7 @@ import {
   fromText,
   generateSeedPhrase,
   getAddressDetails,
-  Lucid,
+  Translucent,
   SpendingValidator,
   toUnit,
   TxHash,
@@ -15,7 +15,7 @@ async function generateAccount(assets: Assets) {
   const seedPhrase = generateSeedPhrase();
   return {
     seedPhrase,
-    address: await (await Lucid.new(undefined, "Custom"))
+    address: await (await Translucent.new(undefined, "Custom"))
       .selectWalletFromSeed(seedPhrase).wallet.address(),
     assets,
   };
@@ -26,12 +26,12 @@ const ACCOUNT_1 = await generateAccount({ lovelace: 100000000n });
 
 const emulator = new Emulator([ACCOUNT_0, ACCOUNT_1]);
 
-const lucid = await Lucid.new(emulator);
+const translucent = await Translucent.new(emulator);
 
-lucid.selectWalletFromSeed(ACCOUNT_0.seedPhrase);
+translucent.selectWalletFromSeed(ACCOUNT_0.seedPhrase);
 
 it("Correct start balance", async () => {
-  const utxos = await lucid.wallet.getUtxos();
+  const utxos = await translucent.wallet.getUtxos();
   const lovelace = utxos.reduce(
     (amount, utxo) => amount + utxo.assets.lovelace,
     0n,
@@ -46,15 +46,15 @@ it("Paid to address", async () => {
   const datum = Data.to(123n);
   const lovelace = 3000000n;
 
-  const tx = await lucid.newTx().payToAddressWithData(recipient, {
+  const tx = await translucent.newTx().payToAddressWithData(recipient, {
     inline: datum,
   }, { lovelace }).complete();
 
   const signedTx = await tx.sign().complete();
   const txHash = await signedTx.submit();
-  await lucid.awaitTx(txHash);
+  await translucent.awaitTx(txHash);
 
-  const utxos = await lucid.utxosAt(
+  const utxos = await translucent.utxosAt(
     recipient,
   );
 
@@ -70,13 +70,13 @@ it("Missing vkey witness", async () => {
 
   const lovelace = 3000000n;
 
-  const tx = await lucid.newTx().payToAddress(recipient, { lovelace })
+  const tx = await translucent.newTx().payToAddress(recipient, { lovelace })
     .complete();
 
   const notSignedTx = await tx.complete();
   try {
     const txHash = await notSignedTx.submit();
-    await lucid.awaitTx(txHash);
+    await translucent.awaitTx(txHash);
     console.log("The tx was never signed. The vkey witness could not exist.")
     expect(false).toEqual(false)
   } catch (_e) {
@@ -89,21 +89,21 @@ it("Mint asset in slot range", async () => {
   const { paymentCredential: paymentCredential2 } = getAddressDetails(
     ACCOUNT_1.address,
   );
-  const mintingPolicy = lucid.utils.nativeScriptFromJson({
+  const mintingPolicy = translucent.utils.nativeScriptFromJson({
     type: "all",
     scripts: [
       {
         type: "before",
-        slot: lucid.utils.unixTimeToSlot(emulator.now() + 60000),
+        slot: translucent.utils.unixTimeToSlot(emulator.now() + 60000),
       },
       { type: "sig", keyHash: paymentCredential?.hash! },
       { type: "sig", keyHash: paymentCredential2?.hash! },
     ],
   });
 
-  const policyId = lucid.utils.mintingPolicyToId(mintingPolicy);
+  const policyId = translucent.utils.mintingPolicyToId(mintingPolicy);
   async function mint(): Promise<TxHash> {
-    const tx = await lucid.newTx()
+    const tx = await translucent.newTx()
        .mintAssets({
          [toUnit(policyId, fromText("Wow"))]: 123n,
       })
@@ -112,9 +112,9 @@ it("Mint asset in slot range", async () => {
       .complete();
 
     await tx.partialSign();
-    lucid.selectWalletFromSeed(ACCOUNT_1.seedPhrase);
+    translucent.selectWalletFromSeed(ACCOUNT_1.seedPhrase);
     await tx.partialSign();
-    lucid.selectWalletFromSeed(ACCOUNT_0.seedPhrase);
+    translucent.selectWalletFromSeed(ACCOUNT_0.seedPhrase);
     const signedTx = await tx.complete();
 
     return signedTx.submit();
@@ -134,56 +134,56 @@ it("Mint asset in slot range", async () => {
 });
 
 it("Reward withdrawal", async () => {
-  const rewardAddress = await lucid.wallet.rewardAddress();
+  const rewardAddress = await translucent.wallet.rewardAddress();
   const poolId = "pool1jsa3rv0dqtkv2dv2rcx349yfx6rxqyvrnvdye4ps3wxyws6q95m";
   const REWARD_AMOUNT = 100000000n;
-  expect(await lucid.wallet.getDelegation()).toEqual({
+  expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
   emulator.distributeRewards(REWARD_AMOUNT);
-  expect(await lucid.wallet.getDelegation()).toEqual({
+  expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
   // Registration
-  await lucid.awaitTx(
-    await (await (await lucid.newTx().registerStake(rewardAddress!).complete())
+  await translucent.awaitTx(
+    await (await (await translucent.newTx().registerStake(rewardAddress!).complete())
       .sign().complete()).submit(),
   );
   emulator.distributeRewards(REWARD_AMOUNT);
-  expect(await lucid.wallet.getDelegation()).toEqual({
+  expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
   // Delegation
-  await lucid.awaitTx(
-    await (await (await lucid.newTx().delegateTo(rewardAddress!, poolId)
+  await translucent.awaitTx(
+    await (await (await translucent.newTx().delegateTo(rewardAddress!, poolId)
       .complete())
       .sign().complete()).submit(),
   );
   emulator.distributeRewards(REWARD_AMOUNT);
-  expect(await lucid.wallet.getDelegation()).toEqual({
+  expect(await translucent.wallet.getDelegation()).toEqual({
     poolId,
     rewards: REWARD_AMOUNT,
   });
   // Deregistration
-  await lucid.awaitTx(
-    await (await (await lucid.newTx().deregisterStake(rewardAddress!)
+  await translucent.awaitTx(
+    await (await (await translucent.newTx().deregisterStake(rewardAddress!)
       .complete())
       .sign().complete()).submit(),
   );
-  expect(await lucid.wallet.getDelegation()).toEqual({
+  expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: REWARD_AMOUNT,
   });
   // Withdrawal
-  await lucid.awaitTx(
-    await (await (await lucid.newTx().withdraw(rewardAddress!, REWARD_AMOUNT)
+  await translucent.awaitTx(
+    await (await (await translucent.newTx().withdraw(rewardAddress!, REWARD_AMOUNT)
       .complete())
       .sign().complete()).submit(),
   );
-  expect(await lucid.wallet.getDelegation()).toEqual({
+  expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
     rewards: 0n,
   });
@@ -194,34 +194,34 @@ it("Evaluate a contract", async () => {
     type: "PlutusV2",
     script: "49480100002221200101",
   };
-  const scriptAddress = lucid.utils.validatorToAddress(alwaysSucceedScript);
+  const scriptAddress = translucent.utils.validatorToAddress(alwaysSucceedScript);
 
-  const tx = await lucid.newTx().payToContract(scriptAddress, {
+  const tx = await translucent.newTx().payToContract(scriptAddress, {
     inline: Data.void(),
   }, { lovelace: 50000000n })
     .complete();
   const signedTx = await tx.sign().complete();
   const txHash = await signedTx.submit();
-  await lucid.awaitTx(txHash);
+  await translucent.awaitTx(txHash);
 
-  const scriptUtxos = await lucid.utxosAt(scriptAddress);
+  const scriptUtxos = await translucent.utxosAt(scriptAddress);
 
   expect(scriptUtxos.length).toEqual(1);
   const _txHash =
-    await (await (await lucid.newTx().collectFrom(scriptUtxos, Data.void())
+    await (await (await translucent.newTx().collectFrom(scriptUtxos, Data.void())
       .attachSpendingValidator(alwaysSucceedScript)
       .complete()).sign().complete()).submit();
   emulator.awaitSlot(100);
 });
 
 it("Check required signer", async () => {
-  const tx = await lucid.newTx().addSigner(ACCOUNT_1.address).payToAddress(
+  const tx = await translucent.newTx().addSigner(ACCOUNT_1.address).payToAddress(
     ACCOUNT_1.address,
     { lovelace: 5000000n },
   )
     .complete();
   await tx.partialSign();
-  lucid.selectWalletFromSeed(ACCOUNT_1.seedPhrase);
+  translucent.selectWalletFromSeed(ACCOUNT_1.seedPhrase);
   await tx.partialSign();
-  await lucid.awaitTx(await tx.complete().then((tx) => tx.submit()));
+  await translucent.awaitTx(await tx.complete().then((tx) => tx.submit()));
 });

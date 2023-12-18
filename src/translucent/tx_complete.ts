@@ -5,7 +5,7 @@ import {
   TransactionWitnesses,
   TxHash,
 } from "../types/mod.ts";
-import { Lucid } from "./lucid.ts";
+import { Translucent } from "./translucent.ts";
 import { TxSigned } from "./tx_signed.ts";
 import { fromHex, toHex } from "../utils/mod.ts";
 
@@ -13,12 +13,12 @@ export class TxComplete {
   txComplete: C.Transaction;
   witnessSetBuilder: C.TransactionWitnessSetBuilder;
   private tasks: (() => Promise<void>)[];
-  private lucid: Lucid;
+  private translucent: Translucent;
   fee: number;
   exUnits: { cpu: number; mem: number } | null = null;
 
-  constructor(lucid: Lucid, tx: C.Transaction) {
-    this.lucid = lucid;
+  constructor(translucent: Translucent, tx: C.Transaction) {
+    this.translucent = translucent;
     this.txComplete = tx;
     this.witnessSetBuilder = C.TransactionWitnessSetBuilder.new();
     this.tasks = [];
@@ -37,7 +37,7 @@ export class TxComplete {
   }
   sign(): TxComplete {
     this.tasks.push(async () => {
-      const witnesses = await this.lucid.wallet.signTx(this.txComplete);
+      const witnesses = await this.translucent.wallet.signTx(this.txComplete);
       this.witnessSetBuilder.add_existing(witnesses);
     });
     return this;
@@ -56,7 +56,7 @@ export class TxComplete {
 
   /** Sign the transaction and return the witnesses that were just made. */
   async partialSign(): Promise<TransactionWitnesses> {
-    const witnesses = await this.lucid.wallet.signTx(this.txComplete);
+    const witnesses = await this.translucent.wallet.signTx(this.txComplete);
     this.witnessSetBuilder.add_existing(witnesses);
     return toHex(witnesses.to_bytes());
   }
@@ -99,7 +99,7 @@ export class TxComplete {
       this.witnessSetBuilder.build(),
       this.txComplete.auxiliary_data(),
     );
-    return new TxSigned(this.lucid, signedTx);
+    return new TxSigned(this.translucent, signedTx);
   }
 
   /** Return the transaction in Hex encoded Cbor. */

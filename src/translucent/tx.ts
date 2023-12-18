@@ -33,7 +33,7 @@ import {
   utxoToCore,
 } from '../utils/mod.ts'
 import { applyDoubleCborEncoding, toHex } from '../utils/utils.ts'
-import { Lucid } from './lucid.ts'
+import { Translucent } from './translucent.ts'
 import { TxComplete } from './tx_complete.ts'
 import * as uplc from 'uplc'
 import { SLOT_CONFIG_NETWORK } from '../plutus/time.ts'
@@ -51,14 +51,14 @@ export class Tx {
   /** Stores the tx instructions, which get executed after calling .complete() */
   private tasks: ((that: Tx) => unknown)[]
   private earlyTasks: ((that: Tx) => unknown)[]
-  private lucid: Lucid
+  private translucent: Translucent
 
   private UTxOs: C.TransactionUnspentOutput[] = []
   private referencedUTxOs: C.TransactionUnspentOutput[] = []
 
-  constructor(lucid: Lucid) {
-    this.lucid = lucid
-    this.txBuilder = C.TransactionBuilder.new(this.lucid.txBuilderConfig)
+  constructor(translucent: Translucent) {
+    this.translucent = translucent
+    this.txBuilder = C.TransactionBuilder.new(this.translucent.txBuilderConfig)
     this.tasks = []
     this.earlyTasks = []
     this.scripts = {}
@@ -71,7 +71,7 @@ export class Tx {
       for (const utxo of utxos) {
         if (utxo.datumHash) {
           throw 'Reference hash not supported'
-          // utxo.datum = Data.to(await that.lucid.datumOf(utxo));
+          // utxo.datum = Data.to(await that.translucent.datumOf(utxo));
           // // Add datum to witness set, so it can be read from validators
           // const plutusData = C.PlutusData.from_bytes(fromHex(utxo.datum!));
           // that.txBuilder.add_plutus_data(plutusData);
@@ -104,7 +104,7 @@ export class Tx {
     this.tasks.push(async (that) => {
       for (const utxo of utxos) {
         if (utxo.datumHash && !utxo.datum) {
-          utxo.datum = Data.to(await that.lucid.datumOf(utxo))
+          utxo.datum = Data.to(await that.translucent.datumOf(utxo))
         }
         const coreUtxo = utxoToCore(utxo)
         this.UTxOs.push(coreUtxo)
@@ -234,7 +234,7 @@ export class Tx {
   payToAddress(address: Address, assets: Assets): Tx {
     this.tasks.push((that) => {
       const output = C.TransactionOutput.new(
-        addressFromWithNetworkCheck(address, that.lucid),
+        addressFromWithNetworkCheck(address, that.translucent),
         assetsToValue(assets),
       )
       that.txBuilder.add_output(C.SingleOutputBuilderResult.new(output))
@@ -262,7 +262,7 @@ export class Tx {
         )
       }
       let outputBuilder = C.TransactionOutputBuilder.new()
-      let outputAddress = addressFromWithNetworkCheck(address, that.lucid)
+      let outputAddress = addressFromWithNetworkCheck(address, that.translucent)
       outputBuilder = outputBuilder.with_address(outputAddress)
 
       if (outputData.hash) {
@@ -280,7 +280,7 @@ export class Tx {
       }
       let valueBuilder = outputBuilder.next()
       let assetsC = assetsToValue(assets)
-      let params = this.lucid.provider ? await this.lucid.provider.getProtocolParameters() : PROTOCOL_PARAMETERS_DEFAULT
+      let params = this.translucent.provider ? await this.translucent.provider.getProtocolParameters() : PROTOCOL_PARAMETERS_DEFAULT
       {
         valueBuilder = valueBuilder.with_asset_and_min_required_coin(
           assetsC.multiasset() || C.MultiAsset.new(),
@@ -321,7 +321,7 @@ export class Tx {
     redeemer?: Redeemer,
   ): Tx {
     this.tasks.push((that) => {
-      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress)
+      const addressDetails = that.translucent.utils.getAddressDetails(rewardAddress)
 
       if (addressDetails.type !== 'Reward' || !addressDetails.stakeCredential) {
         throw new Error('Not a reward address provided.')
@@ -394,7 +394,7 @@ export class Tx {
   /** Register a reward address in order to delegate to a pool and receive rewards. */
   registerStake(rewardAddress: RewardAddress): Tx {
     this.tasks.push((that) => {
-      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress)
+      const addressDetails = that.translucent.utils.getAddressDetails(rewardAddress)
 
       if (addressDetails.type !== 'Reward' || !addressDetails.stakeCredential) {
         throw new Error('Not a reward address provided.')
@@ -426,7 +426,7 @@ export class Tx {
   /** Deregister a reward address. */
   deregisterStake(rewardAddress: RewardAddress, redeemer?: Redeemer): Tx {
     this.tasks.push((that) => {
-      const addressDetails = that.lucid.utils.getAddressDetails(rewardAddress)
+      const addressDetails = that.translucent.utils.getAddressDetails(rewardAddress)
 
       if (addressDetails.type !== 'Reward' || !addressDetails.stakeCredential) {
         throw new Error('Not a reward address provided.')
@@ -498,7 +498,7 @@ export class Tx {
   //   this.tasks.push(async (that) => {
   //     const poolRegistration = await createPoolRegistration(
   //       poolParams,
-  //       that.lucid,
+  //       that.translucent,
   //     )
 
   //     const certificate = C.Certificate.new_pool_registration(poolRegistration)
@@ -513,7 +513,7 @@ export class Tx {
   //   this.tasks.push(async (that) => {
   //     const poolRegistration = await createPoolRegistration(
   //       poolParams,
-  //       that.lucid,
+  //       that.translucent,
   //     )
 
   //     // This flag makes sure a pool deposit is not required
@@ -546,7 +546,7 @@ export class Tx {
   ): Tx {
     this.tasks.push((that) => {
       let rewAdd = C.RewardAddress.from_address(
-        addressFromWithNetworkCheck(rewardAddress, that.lucid),
+        addressFromWithNetworkCheck(rewardAddress, that.translucent),
       )!
       let certBuilder = C.SingleWithdrawalBuilder.new(
         rewAdd,
@@ -605,7 +605,7 @@ export class Tx {
    * The StakeKeyHash is taken when providing a Reward address.
    */
   addSigner(address: Address | RewardAddress): Tx {
-    const addressDetails = this.lucid.utils.getAddressDetails(address)
+    const addressDetails = this.translucent.utils.getAddressDetails(address)
 
     if (!addressDetails.paymentCredential && !addressDetails.stakeCredential) {
       throw new Error('Not a valid address.')
@@ -634,7 +634,7 @@ export class Tx {
 
   validFrom(unixTime: UnixTime): Tx {
     this.tasks.push((that) => {
-      const slot = that.lucid.utils.unixTimeToSlot(unixTime)
+      const slot = that.translucent.utils.unixTimeToSlot(unixTime)
       that.txBuilder.set_validity_start_interval(
         C.BigNum.from_str(slot.toString()),
       )
@@ -644,7 +644,7 @@ export class Tx {
 
   validTo(unixTime: UnixTime): Tx {
     this.tasks.push((that) => {
-      const slot = that.lucid.utils.unixTimeToSlot(unixTime)
+      const slot = that.translucent.utils.unixTimeToSlot(unixTime)
       that.txBuilder.set_ttl(C.BigNum.from_str(slot.toString()))
     })
     return this
@@ -790,7 +790,7 @@ export class Tx {
       task = this.tasks.shift()
     }
 
-    const rawWalletUTxOs = await this.lucid.wallet.getUtxosCore()
+    const rawWalletUTxOs = await this.translucent.wallet.getUtxosCore()
     let walletUTxOs: C.TransactionUnspentOutput[] = []
     for (let i = 0; i < rawWalletUTxOs.len(); i++) {
       walletUTxOs.push(rawWalletUTxOs.get(i))
@@ -798,8 +798,8 @@ export class Tx {
     let allUtxos = [...this.UTxOs, ...walletUTxOs, ...this.referencedUTxOs]
 
     const changeAddress: C.Address = addressFromWithNetworkCheck(
-      options?.change?.address || (await this.lucid.wallet.address()),
-      this.lucid,
+      options?.change?.address || (await this.translucent.wallet.address()),
+      this.translucent,
     )
     for (const utxo of walletUTxOs) {
       this.txBuilder.add_utxo(
@@ -813,12 +813,12 @@ export class Tx {
     )
     let protocolParameters: ProtocolParameters
     try {
-      protocolParameters = await this.lucid.provider.getProtocolParameters()
+      protocolParameters = await this.translucent.provider.getProtocolParameters()
     } catch {
       protocolParameters = PROTOCOL_PARAMETERS_DEFAULT
     }
     const costMdls = createCostModels(protocolParameters.costModels)
-    const slotConfig: SlotConfig = SLOT_CONFIG_NETWORK[this.lucid.network]
+    const slotConfig: SlotConfig = SLOT_CONFIG_NETWORK[this.translucent.network]
     let draftTx = txRedeemerBuilder.draft_tx()
     {
       let redeemers = draftTx.witness_set().redeemers()
@@ -864,7 +864,7 @@ export class Tx {
       )
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked()
-    return new TxComplete(this.lucid, builtTx)
+    return new TxComplete(this.translucent, builtTx)
   }
 
   /** Return the current transaction body in Hex encoded Cbor. */
@@ -876,11 +876,11 @@ export class Tx {
 
 async function createPoolRegistration(
   poolParams: PoolParams,
-  lucid: Lucid,
+  translucent: Translucent,
 ): Promise<C.PoolRegistration> {
   const poolOwners = C.Ed25519KeyHashes.new()
   poolParams.owners.forEach((owner) => {
-    const { stakeCredential } = lucid.utils.getAddressDetails(owner)
+    const { stakeCredential } = translucent.utils.getAddressDetails(owner)
     if (stakeCredential?.type === 'Key') {
       poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash))
     } else throw new Error('Only key hashes allowed for pool owners.')
@@ -946,7 +946,7 @@ async function createPoolRegistration(
         C.BigNum.from_str(poolParams.margin[1].toString()),
       ),
       C.RewardAddress.from_address(
-        addressFromWithNetworkCheck(poolParams.rewardAddress, lucid),
+        addressFromWithNetworkCheck(poolParams.rewardAddress, translucent),
       )!,
       poolOwners,
       relays,
@@ -959,11 +959,11 @@ async function createPoolRegistration(
 
 function addressFromWithNetworkCheck(
   address: Address | RewardAddress,
-  lucid: Lucid,
+  translucent: Translucent,
 ): C.Address {
-  const { type, networkId } = lucid.utils.getAddressDetails(address)
+  const { type, networkId } = translucent.utils.getAddressDetails(address)
 
-  const actualNetworkId = networkToId(lucid.network)
+  const actualNetworkId = networkToId(translucent.network)
   if (networkId !== actualNetworkId) {
     throw new Error(
       `Invalid address: Expected address with network id ${actualNetworkId}, but got ${networkId}`,
