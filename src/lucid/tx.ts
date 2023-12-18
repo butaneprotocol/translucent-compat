@@ -12,6 +12,7 @@ import {
   OutputData,
   PaymentKeyHash,
   PoolId,
+  PoolParams,
   ProtocolParameters,
   Redeemer,
   RewardAddress,
@@ -247,7 +248,7 @@ export class Tx {
     outputData: Datum | OutputData,
     assets: Assets,
   ): Tx {
-    this.tasks.push((that) => {
+    this.tasks.push(async (that) => {
       if (typeof outputData === 'string') {
         outputData = { asHash: outputData }
       }
@@ -261,27 +262,16 @@ export class Tx {
         )
       }
       let outputBuilder = C.TransactionOutputBuilder.new()
-
-      // const output = C.TransactionOutput.new(
-      //   addressFromWithNetworkCheck(address, that.lucid),
-      //   assetsToValue(assets),
-      // )
       let outputAddress = addressFromWithNetworkCheck(address, that.lucid)
       outputBuilder = outputBuilder.with_address(outputAddress)
 
       if (outputData.hash) {
-        // output.set_datum(
-        //   C.Datum.new_data_hash(C.DataHash.from_hex(outputData.hash)),
-        // )
+        
       } else if (outputData.asHash) {
         throw 'no support for as hash'
-        // const plutusData = C.PlutusData.from_bytes(fromHex(outputData.asHash));
-        // output.set_datum(C.Datum.new_data_hash(C.hash_plutus_data(plutusData)));
-        // that.txBuilder.add_plutus_data(plutusData);
       } else if (outputData.inline) {
         const plutusData = C.PlutusData.from_bytes(fromHex(outputData.inline))
         outputBuilder = outputBuilder.with_data(C.Datum.new_data(plutusData))
-        //output.set_datum(C.Datum.new_data(plutusData))
       }
 
       const script = outputData.scriptRef
@@ -289,12 +279,17 @@ export class Tx {
         outputBuilder = outputBuilder.with_reference_script(toScriptRef(script))
       }
       let valueBuilder = outputBuilder.next()
-      // todo: min coin
       let assetsC = assetsToValue(assets)
-      if (BigInt(assetsC.coin().to_str()) < 90000000n) {
-        assetsC.set_coin(C.BigNum.from_str('90000000'))
+      let params = this.lucid.provider ? await this.lucid.provider.getProtocolParameters() : PROTOCOL_PARAMETERS_DEFAULT
+      {
+        valueBuilder = valueBuilder.with_asset_and_min_required_coin(
+          assetsC.multiasset() || C.MultiAsset.new(),
+          C.BigNum.from_str(params.coinsPerUtxoByte.toString()),
+        )
+        let output = valueBuilder.build()
+        let coin = Math.max(parseInt(output.output().amount().coin().to_str()), Number(assets.lovelace || 0))
+        valueBuilder = valueBuilder.with_coin(C.BigNum.from_str(coin.toString()))
       }
-      valueBuilder = valueBuilder.with_value(assetsC)
       let output = valueBuilder.build()
       that.txBuilder.add_output(output)
     })
@@ -820,7 +815,7 @@ export class Tx {
     let protocolParameters: ProtocolParameters
     try {
       protocolParameters = await this.lucid.provider.getProtocolParameters()
-    }catch{
+    } catch {
       protocolParameters = PROTOCOL_PARAMETERS_DEFAULT
     }
     const costMdls = createCostModels(protocolParameters.costModels)
@@ -875,8 +870,8 @@ export class Tx {
 
   /** Return the current transaction body in Hex encoded Cbor. */
   async toString(): Promise<string> {
-    let complete = await this.complete();
-    return complete.toString();
+    let complete = await this.complete()
+    return complete.toString()
   }
 }
 

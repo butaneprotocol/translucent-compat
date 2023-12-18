@@ -714,16 +714,6 @@ export class Emulator implements Provider {
       checkAndConsumeHash(paymentCredential!, 'Spend', index)
     })
 
-    // There must always be some resolved input with a key hash (which pays fees)
-    if (!resolvedInputs.some(input => {
-      const { paymentCredential } = getAddressDetails(input.entry.utxo.address)
-      if (paymentCredential){
-        return true
-      }
-    })) {
-      throw new Error('No resolved input has a key hash.')
-    }
-
     // Create outputs and consume datum hashes
     const outputs = (() => {
       const collected = []
