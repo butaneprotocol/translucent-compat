@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "build:wasm": "cd ./uplc && wasm-pack build -t nodejs && cd .. && bun i"
+    "build:wasm": "cd ./uplc && wasm-pack build -t nodejs && rm pkg/.gitignore && cd .. && bun i"
   },
   "devDependencies": {
     "bun-types": "latest",

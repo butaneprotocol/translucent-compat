@@ -1,0 +1,11 @@
+{
+  "name": "uplc-wrapper",
+  "version": "0.0.1",
+  "files": [
+    "uplc_wrapper_bg.wasm",
+    "uplc_wrapper.js",
+    "uplc_wrapper.d.ts"
+  ],
+  "main": "uplc_wrapper.js",
+  "types": "uplc_wrapper.d.ts"
+}
