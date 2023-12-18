@@ -282,13 +282,14 @@ export class Tx {
       let assetsC = assetsToValue(assets)
       let params = this.translucent.provider ? await this.translucent.provider.getProtocolParameters() : PROTOCOL_PARAMETERS_DEFAULT
       {
+        let masset = assetsC.multiasset() || C.MultiAsset.new()
         valueBuilder = valueBuilder.with_asset_and_min_required_coin(
-          assetsC.multiasset() || C.MultiAsset.new(),
+          masset,
           C.BigNum.from_str(params.coinsPerUtxoByte.toString()),
         )
         let output = valueBuilder.build()
         let coin = Math.max(parseInt(output.output().amount().coin().to_str()), Number(assets.lovelace || 0))
-        valueBuilder = valueBuilder.with_coin(C.BigNum.from_str(coin.toString()))
+        valueBuilder = valueBuilder.with_coin_and_asset(C.BigNum.from_str(coin.toString()), masset)
       }
       let output = valueBuilder.build()
       that.txBuilder.add_output(output)
