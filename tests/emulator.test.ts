@@ -68,7 +68,7 @@ it("Missing vkey witness", async () => {
   const recipient =
     "addr_test1wqag3rt979nep9g2wtdwu8mr4gz6m4kjdpp5zp705km8wys6t2kla";
 
-  const lovelace = 3000000n;
+  const lovelace = 100000n;
 
   const tx = await translucent.newTx().payToAddress(recipient, { lovelace })
     .complete();

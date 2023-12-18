@@ -232,12 +232,28 @@ export class Tx {
 
   /** Pay to a public key or native script address. */
   payToAddress(address: Address, assets: Assets): Tx {
-    this.tasks.push((that) => {
+    this.tasks.push(async (that) => {
       const output = C.TransactionOutput.new(
         addressFromWithNetworkCheck(address, that.translucent),
         assetsToValue(assets),
       )
-      that.txBuilder.add_output(C.SingleOutputBuilderResult.new(output))
+      let outputBuilder = C.TransactionOutputBuilder.new()
+      let outputAddress = addressFromWithNetworkCheck(address, that.translucent)
+      outputBuilder = outputBuilder.with_address(outputAddress)
+      let valueBuilder = outputBuilder.next()
+      let assetsC = assetsToValue(assets)
+      let params = this.translucent.provider ? await this.translucent.provider.getProtocolParameters() : PROTOCOL_PARAMETERS_DEFAULT
+      {
+        let masset = assetsC.multiasset() || C.MultiAsset.new()
+        valueBuilder = valueBuilder.with_asset_and_min_required_coin(
+          masset,
+          C.BigNum.from_str(params.coinsPerUtxoByte.toString()),
+        )
+        let output = valueBuilder.build()
+        let coin = Math.max(parseInt(output.output().amount().coin().to_str()), Number(assets.lovelace || 0))
+        valueBuilder = valueBuilder.with_coin_and_asset(C.BigNum.from_str(coin.toString()), masset)
+      }
+      that.txBuilder.add_output(valueBuilder.build())
     })
     return this
   }

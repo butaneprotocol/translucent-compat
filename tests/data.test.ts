@@ -1,5 +1,7 @@
 import { Constr, Data, applyParamsToScript } from "../src/mod.ts";
 
+console.log("DATA VOID", Data.from("d87980"))
+
 it("Roundtrip data bigint", () => {
   /*
     - TypeScript:
