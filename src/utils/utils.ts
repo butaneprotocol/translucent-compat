@@ -695,7 +695,6 @@ export function fromUnit(
  * It follows this Json format: https://github.com/input-output-hk/cardano-node/blob/master/doc/reference/simple-scripts.md
  */
 export function nativeScriptFromJson(nativeScript: NativeScript): Script {
-  console.log(JSON.stringify(nativeScript))
   return {
     type: 'Native',
     script: toHex(

@@ -750,7 +750,6 @@ export class Tx {
           C.PlutusV2Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
         )
       }
-      console.log('Adding script: ', ps.hash().to_hex().toString())
       this.scripts[ps.hash().to_hex().toString()] = { inlineScript: ps }
     } else {
       throw new Error('No variant matched.')

@@ -85,12 +85,10 @@ it("Missing vkey witness", async () => {
 });
 
 it("Mint asset in slot range", async () => {
-  console.log("a")
   const { paymentCredential } = getAddressDetails(ACCOUNT_0.address);
   const { paymentCredential: paymentCredential2 } = getAddressDetails(
     ACCOUNT_1.address,
   );
-  console.log("c")
   const mintingPolicy = lucid.utils.nativeScriptFromJson({
     type: "all",
     scripts: [
@@ -104,7 +102,6 @@ it("Mint asset in slot range", async () => {
   });
 
   const policyId = lucid.utils.mintingPolicyToId(mintingPolicy);
-  console.log("b")
   async function mint(): Promise<TxHash> {
     const tx = await lucid.newTx()
        .mintAssets({

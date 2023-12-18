@@ -369,12 +369,11 @@ it("Apply params to script", () => {
       script: applyParamsToScript(
         script,
         [10n, "3131"],
-        Data.Tuple([Data.Integer()]) as unknown as unknown[], // this is the real type we check against
+        Data.Tuple([Data.Integer()]) as unknown as unknown[],
       ),
     };
     expect(!mintingPolicy).toBeTruthy();
   } catch (e) {
-    console.log(e)
     expect(true).toBeTruthy();
   }
   try {
@@ -387,7 +386,6 @@ it("Apply params to script", () => {
     };
     expect(mintingPolicy).toBeTruthy();
   } catch (e) {
-    console.log(e)
     expect(false).toBeTruthy()
   }
 });
