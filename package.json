@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "build:wasm": "cd uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && bun i"
+    "build:wasm": "cd ./uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && bun i"
   },
   "devDependencies": {
     "bun-types": "latest",
@@ -30,8 +30,8 @@
     "@sinclair/typebox": "^0.31.28",
     "fast-check": "^3.14.0",
     "sha256": "^0.2.0",
-    "uplc-node": "file:uplc/pkg-node",
-    "uplc-web": "file:uplc/pkg-web"
+    "uplc-node": "file:./uplc/pkg-node",
+    "uplc-web": "file:./uplc/pkg-web"
   },
   "browser": {
     "./core/core.ts": "./core/core-browser.ts"
