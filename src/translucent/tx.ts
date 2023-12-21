@@ -1,4 +1,4 @@
-import { C } from '../core/mod.ts'
+import { C, U } from '../core/mod.ts'
 import { Data } from '../mod.ts'
 import {
   Address,
@@ -35,7 +35,6 @@ import {
 import { applyDoubleCborEncoding, toHex } from '../utils/utils.ts'
 import { Translucent } from './translucent.ts'
 import { TxComplete } from './tx_complete.ts'
-import * as uplc from 'uplc'
 import { SLOT_CONFIG_NETWORK } from '../plutus/time.ts'
 
 type ScriptOrRef =
@@ -862,7 +861,7 @@ export class Tx {
       }
     }
     let draftTxBytes = draftTx.to_bytes()
-    const uplcResults = uplc.eval_phase_two_raw(
+    const uplcResults = U.eval_phase_two_raw(
       draftTxBytes,
       allUtxos.map((x) => x.input().to_bytes()),
       allUtxos.map((x) => x.output().to_bytes()),

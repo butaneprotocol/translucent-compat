@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "build:wasm": "cd ./uplc && wasm-pack build -t nodejs && rm pkg/.gitignore && cd .. && bun i"
+    "build:wasm": "cd uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && bun i"
   },
   "devDependencies": {
     "bun-types": "latest",
@@ -24,10 +24,11 @@
   },
   "dependencies": {
     "@dcspark/cardano-multiplatform-lib-nodejs": "^3.1.2",
-    "@emurgo/cardano-message-signing-browser": "^1.0.1",
+    "@emurgo/cardano-message-signing-nodejs": "^1.0.1",
     "@sinclair/typebox": "^0.31.28",
+    "browser-or-node": "^3.0.0-pre.0",
     "fast-check": "^3.14.0",
     "sha256": "^0.2.0",
-    "uplc": "file:./uplc/pkg"
+    "uplc-node": "file:uplc/pkg-node"
   }
 }

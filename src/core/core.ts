@@ -1,4 +1,5 @@
 import * as C from "@dcspark/cardano-multiplatform-lib-nodejs";
-import * as M from "@emurgo/cardano-message-signing-browser";
+import * as U from "uplc-node";
+import * as M from "@emurgo/cardano-message-signing-nodejs";
 
-export { C, M };
+export { C, U, M };

@@ -1,4 +1,4 @@
-import { C } from '../core/mod.ts'
+import { C, U } from '../core/mod.ts'
 import {
   Address,
   AddressDetails,
@@ -35,8 +35,6 @@ import {
   unixTimeToEnclosingSlot,
 } from '../plutus/time.ts'
 import { Data } from '../plutus/data.ts'
-import * as uplc from 'uplc'
-
 export class Utils {
   private translucent: Translucent
   constructor(translucent: Translucent) {
@@ -744,7 +742,7 @@ export function applyParamsToScript<T extends unknown[] = Data[]>(
 ): string {
   const p = (type ? Data.castTo<T>(params, type) : params) as Data[]
   return toHex(
-    uplc.apply_params_to_script(
+    U.apply_params_to_script(
       fromHex(Data.to(p)),
       fromHex(plutusScript),
     ),
