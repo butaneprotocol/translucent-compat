@@ -44,7 +44,6 @@ type ScriptOrRef =
 export class Tx {
   txBuilder: C.TransactionBuilder
 
-  /* TODO: Add new tasks list so order of attachScript doesn't matter  */
   private scripts: Record<string, ScriptOrRef>
   private native_scripts: Record<string, C.NativeScript>
   /** Stores the tx instructions, which get executed after calling .complete() */
@@ -662,6 +661,7 @@ export class Tx {
     this.tasks.push((that) => {
       const slot = that.translucent.utils.unixTimeToSlot(unixTime)
       that.txBuilder.set_ttl(C.BigNum.from_str(slot.toString()))
+      //todo: we need to make the tx builder fail if the intervals are wrong for native scripts.
     })
     return this
   }
@@ -805,6 +805,17 @@ export class Tx {
       await task(this)
       task = this.tasks.shift()
     }
+
+    // todo: get upper bound of scripts, get lower bound, if tx doesn't fit to the bounds of nativescripts, then fail.
+    // todo: check if other native script conditions are unverified in building.
+    // let upperboundTtl = Infinity
+    // let lowerboundTtl = 0
+    // for (const script of Object.values(this.native_scripts)) {
+    //   let thisUpper = script.
+    //   if (upperboundTtl) {
+
+    //   }
+    // }
 
     const rawWalletUTxOs = await this.translucent.wallet.getUtxosCore()
     let walletUTxOs: C.TransactionUnspentOutput[] = []

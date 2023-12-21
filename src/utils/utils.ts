@@ -388,7 +388,6 @@ export function getAddressDetails(address: string): AddressDetails {
 
     return {
       type: 'Byron',
-      // todo: fix!
       networkId: parsedAddress.to_address().network_id(),
       address: {
         bech32: '',

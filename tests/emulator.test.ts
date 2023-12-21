@@ -123,14 +123,17 @@ it("Mint asset in slot range", async () => {
   await mint();
 
   emulator.awaitBlock(4);
-
+  let success = false;
   try {
     await mint();
-    console.log("The transactions should have failed because of exceeding slot range.")
-    expect(true).toEqual(false);
+    success = true
   } catch (_e) {
-    expect(true).toEqual(true);
+    // Failed successfully
   }
+  if (success){
+    throw "The transactions should have failed because of exceeding slot range.";
+  }
+  expect(success).toBeFalsy()
 });
 
 it("Reward withdrawal", async () => {
