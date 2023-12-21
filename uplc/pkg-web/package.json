@@ -6,6 +6,9 @@
     "uplc_wrapper.js",
     "uplc_wrapper.d.ts"
   ],
-  "main": "uplc_wrapper.js",
-  "types": "uplc_wrapper.d.ts"
+  "module": "uplc_wrapper.js",
+  "types": "uplc_wrapper.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
 }
