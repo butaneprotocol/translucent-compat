@@ -1,5 +1,5 @@
 {
-  "name": "@butaneprotocol/translucent",
+  "name": "@txpipe/translucent",
   "module": "index.ts",
   "type": "module",
   "scripts": {
