@@ -3,5 +3,5 @@ rm -rf pkg-node
 rm -rf pkg-web
 wasm-pack build -t nodejs
 mv pkg pkg-node
-wasm-pack build -t web
+wasm-pack build
 mv pkg pkg-web

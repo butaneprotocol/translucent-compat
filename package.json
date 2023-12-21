@@ -25,10 +25,15 @@
   "dependencies": {
     "@dcspark/cardano-multiplatform-lib-nodejs": "^3.1.2",
     "@emurgo/cardano-message-signing-nodejs": "^1.0.1",
+    "@dcspark/cardano-multiplatform-lib-browser": "^3.1.2",
+    "@emurgo/cardano-message-signing-browser": "^1.0.1",
     "@sinclair/typebox": "^0.31.28",
-    "browser-or-node": "^3.0.0-pre.0",
     "fast-check": "^3.14.0",
     "sha256": "^0.2.0",
-    "uplc-node": "file:uplc/pkg-node"
+    "uplc-node": "file:uplc/pkg-node",
+    "uplc-web": "file:uplc/pkg-web"
+  },
+  "browser": {
+    "./core/core.ts": "./core/core-browser.ts"
   }
 }
