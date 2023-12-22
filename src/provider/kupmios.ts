@@ -347,9 +347,9 @@ export class Kupmios implements Provider {
         "message",
         (msg: MessageEvent<string | Buffer>) => {
           try {
-            const { result, error } = JSON.parse(fromMaybeBuffer(msg.data));
-            if (result.transaction) res(result.transaction.id);
-            else rej(error);
+            const response = JSON.parse(fromMaybeBuffer(msg.data));
+            if ('result' in response) res(response.result.transaction.id);
+            else rej(response.error);
             client.close();
           } catch (e) {
             rej(e);

@@ -860,6 +860,17 @@ export class Tx {
       );
     }
     this.txBuilder.select_utxos(2);
+
+    let collateralUTxO: C.InputBuilderResult
+    {
+      let foundUtxo = walletUTxOs.find((x)=>BigInt(x.output().amount().coin().to_str())>=(BigInt(Math.pow(10, 7))))
+      if (foundUtxo==undefined){
+        throw "Could not find a suitable collateral UTxO."
+      }else{
+        collateralUTxO = C.SingleInputBuilder.new(foundUtxo.input(), foundUtxo.output()).payment_key()
+      }
+    }
+    this.txBuilder.add_collateral(collateralUTxO)
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
       0,
       changeAddress,
