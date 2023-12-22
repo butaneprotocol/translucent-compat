@@ -1,0 +1,20 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+      - name: Formatting Checks
+        run: |
+          bun prettier --check .
+      # - name: Lint and Compile Checks
+      #   run: |
+      #     bun run lint
+      - name: Tests
+        run: bun run test

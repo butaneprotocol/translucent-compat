@@ -39,20 +39,24 @@ translucent.txBuilderConfig = C.TransactionBuilderConfigBuilder.new()
       C.BigNum.from_str(protocolParameters.minFeeB.toString()),
     ),
   )
-  .key_deposit(
-    C.BigNum.from_str(protocolParameters.keyDeposit.toString()),
-  )
-  .pool_deposit(
-    C.BigNum.from_str(protocolParameters.poolDeposit.toString()),
-  )
+  .key_deposit(C.BigNum.from_str(protocolParameters.keyDeposit.toString()))
+  .pool_deposit(C.BigNum.from_str(protocolParameters.poolDeposit.toString()))
   .max_tx_size(protocolParameters.maxTxSize)
   .max_value_size(protocolParameters.maxValSize)
   .collateral_percentage(protocolParameters.collateralPercentage)
   .max_collateral_inputs(protocolParameters.maxCollateralInputs)
-  .ex_unit_prices(C.ExUnitPrices.new(
-    C.UnitInterval.new(C.BigNum.from_str(protocolParameters.priceMem[0].toString()), C.BigNum.from_str(protocolParameters.priceMem[1].toString())),
-    C.UnitInterval.new(C.BigNum.from_str(protocolParameters.priceStep[0].toString()), C.BigNum.from_str(protocolParameters.priceStep[1].toString())),
-))
+  .ex_unit_prices(
+    C.ExUnitPrices.new(
+      C.UnitInterval.new(
+        C.BigNum.from_str(protocolParameters.priceMem[0].toString()),
+        C.BigNum.from_str(protocolParameters.priceMem[1].toString()),
+      ),
+      C.UnitInterval.new(
+        C.BigNum.from_str(protocolParameters.priceStep[0].toString()),
+        C.BigNum.from_str(protocolParameters.priceStep[1].toString()),
+      ),
+    ),
+  )
   .costmdls(createCostModels(protocolParameters.costModels))
   .build();
 
@@ -109,12 +113,12 @@ it("Wallet from utxos roundtrip (legacy utxos)", async () => {
     address:
       "addr_test1qzfauplclmk6fxuncn8adqt7hnahhlz2pvvzxlqpj6eqtk35g6en4e2aya53ewldpqxl2xpzvtps0ndtvtf6fzpl880srm02gc",
     utxos: rawUtxos.map((raw) =>
-      coreToUtxo(C.TransactionUnspentOutput.from_bytes(fromHex(raw)))
+      coreToUtxo(C.TransactionUnspentOutput.from_bytes(fromHex(raw))),
     ),
   });
 
   const rawUtxos_ = (await translucent.wallet.getUtxos()).map((utxo) =>
-    toHex(utxoToCore(utxo).to_bytes())
+    toHex(utxoToCore(utxo).to_bytes()),
   );
 
   expect(rawUtxos).toEqual(rawUtxos_);
@@ -367,9 +371,12 @@ it("toUnit/fromUnit property test", () => {
         const policyId = toHex(policyRaw);
         const name = nameRaw.length > 0 ? toHex(nameRaw) : null;
         const assetName = toLabel(label) + (name || "");
-        expect(fromUnit(toUnit(policyId, name, label))).toEqual(
-          { policyId, assetName, name, label },
-        );
+        expect(fromUnit(toUnit(policyId, name, label))).toEqual({
+          policyId,
+          assetName,
+          name,
+          label,
+        });
       },
     ),
   );
@@ -379,57 +386,76 @@ it("Preserve task/transaction order", async () => {
   translucent.selectWalletFrom({
     address:
       "addr_test1qq90qrxyw5qtkex0l7mc86xy9a6xkn5t3fcwm6wq33c38t8nhh356yzp7k3qwmhe4fk0g5u6kx5ka4rz5qcq4j7mvh2sts2cfa",
-    utxos: [{
-      txHash:
-        "2eefc93bc0dda80e78890f1f965733239e1f64f76555e8dcde1a4aa7db67b129",
-      outputIndex: 3,
-      assets: { lovelace: 6770556044n },
-      address:
-        "addr_test1qq90qrxyw5qtkex0l7mc86xy9a6xkn5t3fcwm6wq33c38t8nhh356yzp7k3qwmhe4fk0g5u6kx5ka4rz5qcq4j7mvh2sts2cfa",
-      datumHash: null,
-      datum: null,
-      scriptRef: null,
-    }],
+    utxos: [
+      {
+        txHash:
+          "2eefc93bc0dda80e78890f1f965733239e1f64f76555e8dcde1a4aa7db67b129",
+        outputIndex: 3,
+        assets: { lovelace: 6770556044n },
+        address:
+          "addr_test1qq90qrxyw5qtkex0l7mc86xy9a6xkn5t3fcwm6wq33c38t8nhh356yzp7k3qwmhe4fk0g5u6kx5ka4rz5qcq4j7mvh2sts2cfa",
+        datumHash: null,
+        datum: null,
+        scriptRef: null,
+      },
+    ],
   });
 
-  const txCompA = translucent.newTx().payToAddressWithData(
-    await translucent.wallet.address(),
-    { inline: Data.to(0n) },
-    {},
-  );
+  const txCompA = translucent
+    .newTx()
+    .payToAddressWithData(
+      await translucent.wallet.address(),
+      { inline: Data.to(0n) },
+      {},
+    );
 
-  const txCompB = translucent.newTx()
+  const txCompB = translucent
+    .newTx()
     .payToAddressWithData(
       await translucent.wallet.address(),
       { inline: Data.to(10n) },
       {},
     )
     .compose(
-      translucent.newTx().payToAddressWithData(
-        await translucent.wallet.address(),
-        { inline: Data.to(1n) },
-        {},
-      ).compose(
-        translucent.newTx().payToAddressWithData(
+      translucent
+        .newTx()
+        .payToAddressWithData(
           await translucent.wallet.address(),
-          { inline: Data.to(2n) },
+          { inline: Data.to(1n) },
           {},
+        )
+        .compose(
+          translucent
+            .newTx()
+            .payToAddressWithData(
+              await translucent.wallet.address(),
+              { inline: Data.to(2n) },
+              {},
+            ),
         ),
-      ),
     );
 
-  const tx = await translucent.newTx()
+  const tx = await translucent
+    .newTx()
     .compose(txCompA)
     .compose(txCompB)
     .payToAddressWithData(
       await translucent.wallet.address(),
       { inline: Data.to(3n) },
       {},
-    ).complete();
+    )
+    .complete();
 
   [0n, 10n, 1n, 2n, 3n].forEach((num, i) => {
     const outputNum = BigInt(
-      tx.txComplete.body().outputs().get(i).datum()?.as_inline_data()?.as_integer()?.to_str()!,
+      tx.txComplete
+        .body()
+        .outputs()
+        .get(i)
+        .datum()
+        ?.as_inline_data()
+        ?.as_integer()
+        ?.to_str()!,
     );
     expect(num).toEqual(outputNum);
   });

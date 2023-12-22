@@ -37,6 +37,7 @@ npm install translucent-cardano
 Use polyfills to make translucent run in the browser.
 
 (these polyfills are preliminary and we should package translucent for the browser)
+
 ```
 resolve: {
 		alias: {
@@ -63,27 +64,27 @@ optimizeDeps: {
 ### Basic usage
 
 ```js
-import { Maestro, Translucent } from 'translucent-cardano'
+import { Maestro, Translucent } from "translucent-cardano";
 
 const translucent = await Translucent.new(
-  new Maestro({ network: 'Mainnet', apiKey: '<apikey>' }),
-  'Mainnet',
-)
+  new Maestro({ network: "Mainnet", apiKey: "<apikey>" }),
+  "Mainnet",
+);
 
 // Assumes you are in a browser environment
-const api = await window.cardano.nami.enable()
-translucent.selectWallet(api)
+const api = await window.cardano.nami.enable();
+translucent.selectWallet(api);
 
 const tx = await translucent
   .newTx()
-  .payToAddress('addr...', { lovelace: 5000000n })
-  .complete()
+  .payToAddress("addr...", { lovelace: 5000000n })
+  .complete();
 
-const signedTx = await tx.sign().complete()
+const signedTx = await tx.sign().complete();
 
-const txHash = await signedTx.submit()
+const txHash = await signedTx.submit();
 
-console.log(txHash)
+console.log(txHash);
 ```
 
 <!--

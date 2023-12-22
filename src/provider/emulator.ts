@@ -1,4 +1,4 @@
-import { C } from '../core/core.ts'
+import { C } from "../core/core.ts";
 import {
   Address,
   Assets,
@@ -19,17 +19,17 @@ import {
   Unit,
   UnixTime,
   UTxO,
-} from '../types/types.ts'
-import { PROTOCOL_PARAMETERS_DEFAULT } from '../utils/mod.ts'
+} from "../types/types.ts";
+import { PROTOCOL_PARAMETERS_DEFAULT } from "../utils/mod.ts";
 import {
   coreToUtxo,
   fromHex,
   getAddressDetails,
   toHex,
-} from '../utils/utils.ts'
+} from "../utils/utils.ts";
 
 /** Concatentation of txHash + outputIndex */
-type FlatOutRef = string
+type FlatOutRef = string;
 
 function verifyNativeScript(
   ns: C.NativeScript,
@@ -37,12 +37,12 @@ function verifyNativeScript(
   end?: C.BigNum,
   edKeyHashes?: C.Ed25519KeyHashes,
 ) {
-  return true
+  return true;
 }
 
 export class Emulator implements Provider {
-  ledger: Record<FlatOutRef, { utxo: UTxO; spent: boolean }>
-  mempool: Record<FlatOutRef, { utxo: UTxO; spent: boolean }> = {}
+  ledger: Record<FlatOutRef, { utxo: UTxO; spent: boolean }>;
+  mempool: Record<FlatOutRef, { utxo: UTxO; spent: boolean }> = {};
   /**
    * Only stake key registrations/delegations and rewards are tracked.
    * Other certificates are not tracked.
@@ -50,26 +50,26 @@ export class Emulator implements Provider {
   chain: Record<
     RewardAddress,
     { registeredStake: boolean; delegation: Delegation }
-  > = {}
-  blockHeight: number
-  slot: number
-  time: UnixTime
-  protocolParameters: ProtocolParameters
-  datumTable: Record<DatumHash, Datum> = {}
+  > = {};
+  blockHeight: number;
+  slot: number;
+  time: UnixTime;
+  protocolParameters: ProtocolParameters;
+  datumTable: Record<DatumHash, Datum> = {};
 
   constructor(
     accounts: {
-      address: Address
-      assets: Assets
-      outputData?: OutputData
+      address: Address;
+      assets: Assets;
+      outputData?: OutputData;
     }[],
     protocolParameters: ProtocolParameters = PROTOCOL_PARAMETERS_DEFAULT,
   ) {
-    const GENESIS_HASH = '00'.repeat(32)
-    this.blockHeight = 0
-    this.slot = 0
-    this.time = Date.now()
-    this.ledger = {}
+    const GENESIS_HASH = "00".repeat(32);
+    this.blockHeight = 0;
+    this.slot = 0;
+    this.time = Date.now();
+    this.ledger = {};
     accounts.forEach(({ address, assets, outputData }, index) => {
       if (
         [outputData?.hash, outputData?.asHash, outputData?.inline].filter(
@@ -77,8 +77,8 @@ export class Emulator implements Provider {
         ).length > 1
       ) {
         throw new Error(
-          'Not allowed to set hash, asHash and inline at the same time.',
-        )
+          "Not allowed to set hash, asHash and inline at the same time.",
+        );
       }
 
       this.ledger[GENESIS_HASH + index] = {
@@ -96,69 +96,69 @@ export class Emulator implements Provider {
           scriptRef: outputData?.scriptRef,
         },
         spent: false,
-      }
-    })
-    this.protocolParameters = protocolParameters
+      };
+    });
+    this.protocolParameters = protocolParameters;
   }
 
   now(): UnixTime {
-    return this.time
+    return this.time;
   }
 
   awaitSlot(length = 1) {
-    this.slot += length
-    this.time += length * 1000
-    const currentHeight = this.blockHeight
-    this.blockHeight = Math.floor(this.slot / 20)
+    this.slot += length;
+    this.time += length * 1000;
+    const currentHeight = this.blockHeight;
+    this.blockHeight = Math.floor(this.slot / 20);
 
     if (this.blockHeight > currentHeight) {
       for (const [outRef, { utxo, spent }] of Object.entries(this.mempool)) {
-        this.ledger[outRef] = { utxo, spent }
+        this.ledger[outRef] = { utxo, spent };
       }
 
       for (const [outRef, { spent }] of Object.entries(this.ledger)) {
-        if (spent) delete this.ledger[outRef]
+        if (spent) delete this.ledger[outRef];
       }
 
-      this.mempool = {}
+      this.mempool = {};
     }
   }
 
   awaitBlock(height = 1) {
-    this.blockHeight += height
-    this.slot += height * 20
-    this.time += height * 20 * 1000
+    this.blockHeight += height;
+    this.slot += height * 20;
+    this.time += height * 20 * 1000;
 
     for (const [outRef, { utxo, spent }] of Object.entries(this.mempool)) {
-      this.ledger[outRef] = { utxo, spent }
+      this.ledger[outRef] = { utxo, spent };
     }
 
     for (const [outRef, { spent }] of Object.entries(this.ledger)) {
-      if (spent) delete this.ledger[outRef]
+      if (spent) delete this.ledger[outRef];
     }
 
-    this.mempool = {}
+    this.mempool = {};
   }
 
   getUtxos(addressOrCredential: Address | Credential): Promise<UTxO[]> {
     const utxos: UTxO[] = Object.values(this.ledger).flatMap(({ utxo }) => {
-      if (typeof addressOrCredential === 'string') {
-        return addressOrCredential === utxo.address ? utxo : []
+      if (typeof addressOrCredential === "string") {
+        return addressOrCredential === utxo.address ? utxo : [];
       } else {
-        const { paymentCredential } = getAddressDetails(utxo.address)
-        return paymentCredential?.hash === addressOrCredential.hash ? utxo : []
+        const { paymentCredential } = getAddressDetails(utxo.address);
+        return paymentCredential?.hash === addressOrCredential.hash ? utxo : [];
       }
-    })
+    });
 
-    return Promise.resolve(utxos)
+    return Promise.resolve(utxos);
   }
 
   getProtocolParameters(): Promise<ProtocolParameters> {
-    return Promise.resolve(this.protocolParameters)
+    return Promise.resolve(this.protocolParameters);
   }
 
   getDatum(datumHash: DatumHash): Promise<Datum> {
-    return Promise.resolve(this.datumTable[datumHash])
+    return Promise.resolve(this.datumTable[datumHash]);
   }
 
   getUtxosWithUnit(
@@ -166,20 +166,20 @@ export class Emulator implements Provider {
     unit: Unit,
   ): Promise<UTxO[]> {
     const utxos: UTxO[] = Object.values(this.ledger).flatMap(({ utxo }) => {
-      if (typeof addressOrCredential === 'string') {
+      if (typeof addressOrCredential === "string") {
         return addressOrCredential === utxo.address && utxo.assets[unit] > 0n
           ? utxo
-          : []
+          : [];
       } else {
-        const { paymentCredential } = getAddressDetails(utxo.address)
+        const { paymentCredential } = getAddressDetails(utxo.address);
         return paymentCredential?.hash === addressOrCredential.hash &&
           utxo.assets[unit] > 0n
           ? utxo
-          : []
+          : [];
       }
-    })
+    });
 
-    return Promise.resolve(utxos)
+    return Promise.resolve(utxos);
   }
 
   getUtxosByOutRef(outRefs: OutRef[]): Promise<UTxO[]> {
@@ -187,34 +187,34 @@ export class Emulator implements Provider {
       outRefs.flatMap(
         (outRef) => this.ledger[outRef.txHash + outRef.outputIndex]?.utxo || [],
       ),
-    )
+    );
   }
 
   getUtxoByUnit(unit: string): Promise<UTxO> {
     const utxos: UTxO[] = Object.values(this.ledger).flatMap(({ utxo }) =>
       utxo.assets[unit] > 0n ? utxo : [],
-    )
+    );
 
     if (utxos.length > 1) {
-      throw new Error('Unit needs to be an NFT or only held by one address.')
+      throw new Error("Unit needs to be an NFT or only held by one address.");
     }
 
-    return Promise.resolve(utxos[0])
+    return Promise.resolve(utxos[0]);
   }
 
   getDelegation(rewardAddress: RewardAddress): Promise<Delegation> {
     return Promise.resolve({
       poolId: this.chain[rewardAddress]?.delegation?.poolId || null,
       rewards: this.chain[rewardAddress]?.delegation?.rewards || 0n,
-    })
+    });
   }
 
   awaitTx(txHash: string): Promise<boolean> {
     if (this.mempool[txHash + 0]) {
-      this.awaitBlock()
-      return Promise.resolve(true)
+      this.awaitBlock();
+      return Promise.resolve(true);
     }
-    return Promise.resolve(true)
+    return Promise.resolve(true);
   }
 
   /**
@@ -231,12 +231,12 @@ export class Emulator implements Provider {
           registeredStake,
           delegation: {
             poolId: delegation.poolId,
-            rewards: delegation.rewards += rewards,
+            rewards: (delegation.rewards += rewards),
           },
-        }
+        };
       }
     }
-    this.awaitBlock()
+    this.awaitBlock();
   }
 
   submitTx(tx: Transaction): Promise<TxHash> {
@@ -257,75 +257,75 @@ export class Emulator implements Provider {
           - Validity interval
      */
 
-    const desTx = C.Transaction.from_bytes(fromHex(tx))
+    const desTx = C.Transaction.from_bytes(fromHex(tx));
 
-    const body = desTx.body()
-    const witnesses = desTx.witness_set()
-    const datums = witnesses.plutus_data()
+    const body = desTx.body();
+    const witnesses = desTx.witness_set();
+    const datums = witnesses.plutus_data();
 
-    const txHash = C.hash_transaction(body).to_hex()
+    const txHash = C.hash_transaction(body).to_hex();
 
     // Validity interval
     // Lower bound is inclusive?
     // Upper bound is inclusive?
     const lowerBound = body.validity_start_interval()
       ? parseInt(body.validity_start_interval()!.to_str())
-      : null
-    const upperBound = body.ttl() ? parseInt(body.ttl()!.to_str()) : null
+      : null;
+    const upperBound = body.ttl() ? parseInt(body.ttl()!.to_str()) : null;
 
     if (Number.isInteger(lowerBound) && this.slot < lowerBound!) {
       throw new Error(
         `Lower bound (${lowerBound}) not in slot range (${this.slot}).`,
-      )
+      );
     }
 
     if (Number.isInteger(upperBound) && this.slot > upperBound!) {
       throw new Error(
         `Upper bound (${upperBound}) not in slot range (${this.slot}).`,
-      )
+      );
     }
 
     // Datums in witness set
     const datumTable = (() => {
-      const table: Record<DatumHash, Datum> = {}
+      const table: Record<DatumHash, Datum> = {};
       for (let i = 0; i < (datums?.len() || 0); i++) {
-        const datum = datums!.get(i)
-        const datumHash = C.hash_plutus_data(datum).to_hex()
-        table[datumHash] = toHex(datum.to_bytes())
+        const datum = datums!.get(i);
+        const datumHash = C.hash_plutus_data(datum).to_hex();
+        table[datumHash] = toHex(datum.to_bytes());
       }
-      return table
-    })()
+      return table;
+    })();
 
-    const consumedHashes = new Set()
+    const consumedHashes = new Set();
 
     // Witness keys
     const keyHashes = (() => {
-      const keyHashes = []
+      const keyHashes = [];
       for (let i = 0; i < (witnesses.vkeys()?.len() || 0); i++) {
-        const witness = witnesses.vkeys()!.get(i)
-        const publicKey = witness.vkey().public_key()
-        const keyHash = publicKey.hash().to_hex()
+        const witness = witnesses.vkeys()!.get(i);
+        const publicKey = witness.vkey().public_key();
+        const keyHash = publicKey.hash().to_hex();
 
         if (!publicKey.verify(fromHex(txHash), witness.signature())) {
-          throw new Error(`Invalid vkey witness. Key hash: ${keyHash}`)
+          throw new Error(`Invalid vkey witness. Key hash: ${keyHash}`);
         }
-        keyHashes.push(keyHash)
+        keyHashes.push(keyHash);
       }
-      return keyHashes
-    })()
+      return keyHashes;
+    })();
 
     // We only need this to verify native scripts. The check happens in the CML.
-    const edKeyHashes = C.Ed25519KeyHashes.new()
+    const edKeyHashes = C.Ed25519KeyHashes.new();
     keyHashes.forEach((keyHash) =>
       edKeyHashes.add(C.Ed25519KeyHash.from_hex(keyHash)),
-    )
+    );
 
     const nativeHashes = (() => {
-      const scriptHashes = []
+      const scriptHashes = [];
 
       for (let i = 0; i < (witnesses.native_scripts()?.len() || 0); i++) {
-        const witness = witnesses.native_scripts()!.get(i)
-        const scriptHash = witness.hash().to_hex()
+        const witness = witnesses.native_scripts()!.get(i);
+        const scriptHash = witness.hash().to_hex();
 
         if (
           !verifyNativeScript(
@@ -341,58 +341,58 @@ export class Emulator implements Provider {
         ) {
           throw new Error(
             `Invalid native script witness. Script hash: ${scriptHash}`,
-          )
+          );
         }
         for (let i = 0; i < witness.get_required_signers().len(); i++) {
-          const keyHash = witness.get_required_signers().get(i).to_hex()
-          consumedHashes.add(keyHash)
+          const keyHash = witness.get_required_signers().get(i).to_hex();
+          consumedHashes.add(keyHash);
         }
-        scriptHashes.push(scriptHash)
+        scriptHashes.push(scriptHash);
       }
-      return scriptHashes
-    })()
+      return scriptHashes;
+    })();
 
-    const nativeHashesOptional: Record<ScriptHash, C.NativeScript> = {}
-    const plutusHashesOptional: ScriptHash[] = []
+    const nativeHashesOptional: Record<ScriptHash, C.NativeScript> = {};
+    const plutusHashesOptional: ScriptHash[] = [];
 
     const plutusHashes = (() => {
-      const scriptHashes = []
+      const scriptHashes = [];
       for (let i = 0; i < (witnesses.plutus_v1_scripts()?.len() || 0); i++) {
-        const script = witnesses.plutus_v1_scripts()!.get(i)
-        const scriptHash = script.hash().to_hex()
+        const script = witnesses.plutus_v1_scripts()!.get(i);
+        const scriptHash = script.hash().to_hex();
 
-        scriptHashes.push(scriptHash)
+        scriptHashes.push(scriptHash);
       }
       for (let i = 0; i < (witnesses.plutus_v2_scripts()?.len() || 0); i++) {
-        const script = witnesses.plutus_v2_scripts()!.get(i)
-        const scriptHash = script.hash().to_hex()
+        const script = witnesses.plutus_v2_scripts()!.get(i);
+        const scriptHash = script.hash().to_hex();
 
-        scriptHashes.push(scriptHash)
+        scriptHashes.push(scriptHash);
       }
-      return scriptHashes
-    })()
+      return scriptHashes;
+    })();
 
-    const inputs = body.inputs()
+    const inputs = body.inputs();
     //inputs.sort();
 
     type ResolvedInput = {
-      entry: { utxo: UTxO; spent: boolean }
-      type: 'Ledger' | 'Mempool'
-    }
+      entry: { utxo: UTxO; spent: boolean };
+      type: "Ledger" | "Mempool";
+    };
 
-    const resolvedInputs: ResolvedInput[] = []
+    const resolvedInputs: ResolvedInput[] = [];
 
     // Check existence of inputs and look for script refs.
     for (let i = 0; i < inputs.len(); i++) {
-      const input = inputs.get(i)
+      const input = inputs.get(i);
 
-      const outRef = input.transaction_id().to_hex() + input.index().to_str()
+      const outRef = input.transaction_id().to_hex() + input.index().to_str();
 
-      const entryLedger = this.ledger[outRef]
+      const entryLedger = this.ledger[outRef];
 
       const { entry, type }: ResolvedInput = !entryLedger
-        ? { entry: this.mempool[outRef]!, type: 'Mempool' }
-        : { entry: entryLedger, type: 'Ledger' }
+        ? { entry: this.mempool[outRef]!, type: "Mempool" }
+        : { entry: entryLedger, type: "Ledger" };
 
       if (!entry || entry.spent) {
         throw new Error(
@@ -400,46 +400,46 @@ export class Emulator implements Provider {
             txHash: entry?.utxo.txHash,
             outputIndex: entry?.utxo.outputIndex,
           })}\nIt does not exist or was already spent.`,
-        )
+        );
       }
 
-      const scriptRef = entry.utxo.scriptRef
+      const scriptRef = entry.utxo.scriptRef;
       if (scriptRef) {
         switch (scriptRef.type) {
-          case 'Native': {
-            const script = C.NativeScript.from_bytes(fromHex(scriptRef.script))
-            nativeHashesOptional[script.hash().to_hex()] = script
-            break
+          case "Native": {
+            const script = C.NativeScript.from_bytes(fromHex(scriptRef.script));
+            nativeHashesOptional[script.hash().to_hex()] = script;
+            break;
           }
-          case 'PlutusV1': {
+          case "PlutusV1": {
             const script = C.PlutusV1Script.from_bytes(
               fromHex(scriptRef.script),
-            )
-            plutusHashesOptional.push(script.hash().to_hex())
-            break
+            );
+            plutusHashesOptional.push(script.hash().to_hex());
+            break;
           }
-          case 'PlutusV2': {
+          case "PlutusV2": {
             const script = C.PlutusV2Script.from_bytes(
               fromHex(scriptRef.script),
-            )
-            plutusHashesOptional.push(script.hash().to_hex())
-            break
+            );
+            plutusHashesOptional.push(script.hash().to_hex());
+            break;
           }
         }
       }
 
-      if (entry.utxo.datumHash) consumedHashes.add(entry.utxo.datumHash)
+      if (entry.utxo.datumHash) consumedHashes.add(entry.utxo.datumHash);
 
-      resolvedInputs.push({ entry, type })
+      resolvedInputs.push({ entry, type });
     }
 
     // Check existence of reference inputs and look for script refs.
     for (let i = 0; i < (body.reference_inputs()?.len() || 0); i++) {
-      const input = body.reference_inputs()!.get(i)
+      const input = body.reference_inputs()!.get(i);
 
-      const outRef = input.transaction_id().to_hex() + input.index().to_str()
+      const outRef = input.transaction_id().to_hex() + input.index().to_str();
 
-      const entry = this.ledger[outRef] || this.mempool[outRef]
+      const entry = this.ledger[outRef] || this.mempool[outRef];
 
       if (!entry || entry.spent) {
         throw new Error(
@@ -447,56 +447,56 @@ export class Emulator implements Provider {
             txHash: entry?.utxo.txHash,
             outputIndex: entry?.utxo.outputIndex,
           })}\nIt does not exist or was already spent.`,
-        )
+        );
       }
 
-      const scriptRef = entry.utxo.scriptRef
+      const scriptRef = entry.utxo.scriptRef;
       if (scriptRef) {
         switch (scriptRef.type) {
-          case 'Native': {
-            const script = C.NativeScript.from_bytes(fromHex(scriptRef.script))
-            nativeHashesOptional[script.hash().to_hex()] = script
-            break
+          case "Native": {
+            const script = C.NativeScript.from_bytes(fromHex(scriptRef.script));
+            nativeHashesOptional[script.hash().to_hex()] = script;
+            break;
           }
-          case 'PlutusV1': {
+          case "PlutusV1": {
             const script = C.PlutusV1Script.from_bytes(
               fromHex(scriptRef.script),
-            )
-            plutusHashesOptional.push(script.hash().to_hex())
-            break
+            );
+            plutusHashesOptional.push(script.hash().to_hex());
+            break;
           }
-          case 'PlutusV2': {
+          case "PlutusV2": {
             const script = C.PlutusV2Script.from_bytes(
               fromHex(scriptRef.script),
-            )
-            plutusHashesOptional.push(script.hash().to_hex())
-            break
+            );
+            plutusHashesOptional.push(script.hash().to_hex());
+            break;
           }
         }
       }
 
-      if (entry.utxo.datumHash) consumedHashes.add(entry.utxo.datumHash)
+      if (entry.utxo.datumHash) consumedHashes.add(entry.utxo.datumHash);
     }
 
-    type Tag = 'Spend' | 'Mint' | 'Cert' | 'Reward'
+    type Tag = "Spend" | "Mint" | "Cert" | "Reward";
 
     const redeemers = (() => {
       const tagMap: Record<number, Tag> = {
-        0: 'Spend',
-        1: 'Mint',
-        2: 'Cert',
-        3: 'Reward',
-      }
-      const collected = []
+        0: "Spend",
+        1: "Mint",
+        2: "Cert",
+        3: "Reward",
+      };
+      const collected = [];
       for (let i = 0; i < (witnesses.redeemers()?.len() || 0); i++) {
-        const redeemer = witnesses.redeemers()!.get(i)
+        const redeemer = witnesses.redeemers()!.get(i);
         collected.push({
           tag: tagMap[redeemer.tag().kind()],
           index: parseInt(redeemer.index().to_str()),
-        })
+        });
       }
-      return collected
-    })()
+      return collected;
+    })();
 
     function checkAndConsumeHash(
       credential: Credential,
@@ -504,19 +504,19 @@ export class Emulator implements Provider {
       index: number | null,
     ) {
       switch (credential.type) {
-        case 'Key': {
+        case "Key": {
           if (!keyHashes.includes(credential.hash)) {
             throw new Error(
               `Missing vkey witness. Key hash: ${credential.hash}`,
-            )
+            );
           }
-          consumedHashes.add(credential.hash)
-          break
+          consumedHashes.add(credential.hash);
+          break;
         }
-        case 'Script': {
+        case "Script": {
           if (nativeHashes.includes(credential.hash)) {
-            consumedHashes.add(credential.hash)
-            break
+            consumedHashes.add(credential.hash);
+            break;
           } else if (nativeHashesOptional[credential.hash]) {
             if (
               !verifyNativeScript(
@@ -532,9 +532,9 @@ export class Emulator implements Provider {
             ) {
               throw new Error(
                 `Invalid native script witness. Script hash: ${credential.hash}`,
-              )
+              );
             }
-            break
+            break;
           } else if (
             plutusHashes.includes(credential.hash) ||
             plutusHashesOptional.includes(credential.hash)
@@ -544,13 +544,13 @@ export class Emulator implements Provider {
                 (redeemer) => redeemer.tag === tag && redeemer.index === index,
               )
             ) {
-              consumedHashes.add(credential.hash)
-              break
+              consumedHashes.add(credential.hash);
+              break;
             }
           }
           throw new Error(
             `Missing script witness. Script hash: ${credential.hash}`,
-          )
+          );
         }
       }
     }
@@ -558,11 +558,11 @@ export class Emulator implements Provider {
     // Check collateral inputs
 
     for (let i = 0; i < (body.collateral()?.len() || 0); i++) {
-      const input = body.collateral()!.get(i)
+      const input = body.collateral()!.get(i);
 
-      const outRef = input.transaction_id().to_hex() + input.index().to_str()
+      const outRef = input.transaction_id().to_hex() + input.index().to_str();
 
-      const entry = this.ledger[outRef] || this.mempool[outRef]
+      const entry = this.ledger[outRef] || this.mempool[outRef];
 
       if (!entry || entry.spent) {
         throw new Error(
@@ -570,64 +570,64 @@ export class Emulator implements Provider {
             txHash: entry?.utxo.txHash,
             outputIndex: entry?.utxo.outputIndex,
           })}\nIt does not exist or was already spent.`,
-        )
+        );
       }
 
-      const { paymentCredential } = getAddressDetails(entry.utxo.address)
-      if (paymentCredential?.type === 'Script') {
-        throw new Error('Collateral inputs can only contain vkeys.')
+      const { paymentCredential } = getAddressDetails(entry.utxo.address);
+      if (paymentCredential?.type === "Script") {
+        throw new Error("Collateral inputs can only contain vkeys.");
       }
-      checkAndConsumeHash(paymentCredential!, null, null)
+      checkAndConsumeHash(paymentCredential!, null, null);
     }
 
     // Check required signers
 
     for (let i = 0; i < (body.required_signers()?.len() || 0); i++) {
-      const signer = body.required_signers()!.get(i)
-      checkAndConsumeHash({ type: 'Key', hash: signer.to_hex() }, null, null)
+      const signer = body.required_signers()!.get(i);
+      checkAndConsumeHash({ type: "Key", hash: signer.to_hex() }, null, null);
     }
 
     // Check mint witnesses
 
     for (let index = 0; index < (body.mint()?.keys().len() || 0); index++) {
-      const policyId = body.mint()!.keys().get(index).to_hex()
-      checkAndConsumeHash({ type: 'Script', hash: policyId }, 'Mint', index)
+      const policyId = body.mint()!.keys().get(index).to_hex();
+      checkAndConsumeHash({ type: "Script", hash: policyId }, "Mint", index);
     }
 
     // Check withdrawal witnesses
 
     const withdrawalRequests: {
-      rewardAddress: RewardAddress
-      withdrawal: Lovelace
-    }[] = []
+      rewardAddress: RewardAddress;
+      withdrawal: Lovelace;
+    }[] = [];
 
     for (
       let index = 0;
       index < (body.withdrawals()?.keys().len() || 0);
       index++
     ) {
-      const rawAddress = body.withdrawals()!.keys().get(index)
+      const rawAddress = body.withdrawals()!.keys().get(index);
       const withdrawal: Lovelace = BigInt(
         body.withdrawals()!.get(rawAddress)!.to_str(),
-      )
-      const rewardAddress = rawAddress.to_address().to_bech32(undefined)
-      const { stakeCredential } = getAddressDetails(rewardAddress)
-      checkAndConsumeHash(stakeCredential!, 'Reward', index)
+      );
+      const rewardAddress = rawAddress.to_address().to_bech32(undefined);
+      const { stakeCredential } = getAddressDetails(rewardAddress);
+      checkAndConsumeHash(stakeCredential!, "Reward", index);
       if (this.chain[rewardAddress]?.delegation.rewards !== withdrawal) {
         throw new Error(
           "Withdrawal amount doesn't match actual reward balance.",
-        )
+        );
       }
-      withdrawalRequests.push({ rewardAddress, withdrawal })
+      withdrawalRequests.push({ rewardAddress, withdrawal });
     }
 
     // Check cert witnesses
 
     const certRequests: {
-      type: 'Registration' | 'Deregistration' | 'Delegation'
-      rewardAddress: RewardAddress
-      poolId?: PoolId
-    }[] = []
+      type: "Registration" | "Deregistration" | "Delegation";
+      rewardAddress: RewardAddress;
+      poolId?: PoolId;
+    }[] = [];
 
     for (let index = 0; index < (body.certs()?.len() || 0); index++) {
       /*
@@ -638,71 +638,71 @@ export class Emulator implements Provider {
 
         All other certificate types are not checked and considered valid.
       */
-      const cert = body.certs()!.get(index)
+      const cert = body.certs()!.get(index);
       switch (cert.kind()) {
         case 0: {
-          const registration = cert.as_stake_registration()!
+          const registration = cert.as_stake_registration()!;
           const rewardAddress = C.RewardAddress.new(
             C.NetworkInfo.testnet().network_id(),
             registration.stake_credential(),
           )
             .to_address()
-            .to_bech32(undefined)
+            .to_bech32(undefined);
           if (this.chain[rewardAddress]?.registeredStake) {
             throw new Error(
               `Stake key is already registered. Reward address: ${rewardAddress}`,
-            )
+            );
           }
-          certRequests.push({ type: 'Registration', rewardAddress })
-          break
+          certRequests.push({ type: "Registration", rewardAddress });
+          break;
         }
         case 1: {
-          const deregistration = cert.as_stake_deregistration()!
+          const deregistration = cert.as_stake_deregistration()!;
           const rewardAddress = C.RewardAddress.new(
             C.NetworkInfo.testnet().network_id(),
             deregistration.stake_credential(),
           )
             .to_address()
-            .to_bech32(undefined)
+            .to_bech32(undefined);
 
-          const { stakeCredential } = getAddressDetails(rewardAddress)
-          checkAndConsumeHash(stakeCredential!, 'Cert', index)
+          const { stakeCredential } = getAddressDetails(rewardAddress);
+          checkAndConsumeHash(stakeCredential!, "Cert", index);
 
           if (!this.chain[rewardAddress]?.registeredStake) {
             throw new Error(
               `Stake key is already deregistered. Reward address: ${rewardAddress}`,
-            )
+            );
           }
-          certRequests.push({ type: 'Deregistration', rewardAddress })
-          break
+          certRequests.push({ type: "Deregistration", rewardAddress });
+          break;
         }
         case 2: {
-          const delegation = cert.as_stake_delegation()!
+          const delegation = cert.as_stake_delegation()!;
           const rewardAddress = C.RewardAddress.new(
             C.NetworkInfo.testnet().network_id(),
             delegation.stake_credential(),
           )
             .to_address()
-            .to_bech32(undefined)
-          const poolId = delegation.pool_keyhash().to_bech32('pool')
+            .to_bech32(undefined);
+          const poolId = delegation.pool_keyhash().to_bech32("pool");
 
-          const { stakeCredential } = getAddressDetails(rewardAddress)
-          checkAndConsumeHash(stakeCredential!, 'Cert', index)
+          const { stakeCredential } = getAddressDetails(rewardAddress);
+          checkAndConsumeHash(stakeCredential!, "Cert", index);
 
           if (
             !this.chain[rewardAddress]?.registeredStake &&
             !certRequests.find(
               (request) =>
-                request.type === 'Registration' &&
+                request.type === "Registration" &&
                 request.rewardAddress === rewardAddress,
             )
           ) {
             throw new Error(
               `Stake key is not registered. Reward address: ${rewardAddress}`,
-            )
+            );
           }
-          certRequests.push({ type: 'Delegation', rewardAddress, poolId })
-          break
+          certRequests.push({ type: "Delegation", rewardAddress, poolId });
+          break;
         }
       }
     }
@@ -710,190 +710,190 @@ export class Emulator implements Provider {
     // Check input witnesses
 
     resolvedInputs.forEach(({ entry: { utxo } }, index) => {
-      const { paymentCredential } = getAddressDetails(utxo.address)
-      checkAndConsumeHash(paymentCredential!, 'Spend', index)
-    })
+      const { paymentCredential } = getAddressDetails(utxo.address);
+      checkAndConsumeHash(paymentCredential!, "Spend", index);
+    });
 
     // Create outputs and consume datum hashes
     const outputs = (() => {
-      const collected = []
+      const collected = [];
       for (let i = 0; i < body.outputs().len(); i++) {
-        const output = body.outputs().get(i)
+        const output = body.outputs().get(i);
         const unspentOutput = C.TransactionUnspentOutput.new(
           C.TransactionInput.new(
             C.TransactionHash.from_hex(txHash),
             C.BigNum.from_str(i.toString()),
           ),
           output,
-        )
+        );
 
-        const utxo = coreToUtxo(unspentOutput)
+        const utxo = coreToUtxo(unspentOutput);
 
-        if (utxo.datumHash) consumedHashes.add(utxo.datumHash)
+        if (utxo.datumHash) consumedHashes.add(utxo.datumHash);
 
         collected.push({
           utxo,
           spent: false,
-        })
+        });
       }
-      return collected
-    })()
+      return collected;
+    })();
 
     // Check consumed witnesses
     const [extraKeyHash] = keyHashes.filter(
       (keyHash) => !consumedHashes.has(keyHash),
-    )
+    );
     if (extraKeyHash) {
-      throw new Error(`Extraneous vkey witness. Key hash: ${extraKeyHash}`)
+      throw new Error(`Extraneous vkey witness. Key hash: ${extraKeyHash}`);
     }
 
     const [extraNativeHash] = nativeHashes.filter(
       (scriptHash) => !consumedHashes.has(scriptHash),
-    )
+    );
     if (extraNativeHash) {
       throw new Error(
         `Extraneous native script. Script hash: ${extraNativeHash}`,
-      )
+      );
     }
 
     const [extraPlutusHash] = plutusHashes.filter(
       (scriptHash) => !consumedHashes.has(scriptHash),
-    )
+    );
     if (extraPlutusHash) {
       throw new Error(
         `Extraneous plutus script. Script hash: ${extraPlutusHash}`,
-      )
+      );
     }
 
     const [extraDatumHash] = Object.keys(datumTable).filter(
       (datumHash) => !consumedHashes.has(datumHash),
-    )
+    );
     if (extraDatumHash) {
-      throw new Error(`Extraneous plutus data. Datum hash: ${extraDatumHash}`)
+      throw new Error(`Extraneous plutus data. Datum hash: ${extraDatumHash}`);
     }
 
     // Apply transitions
 
     resolvedInputs.forEach(({ entry, type }) => {
-      const outRef = entry.utxo.txHash + entry.utxo.outputIndex
-      entry.spent = true
+      const outRef = entry.utxo.txHash + entry.utxo.outputIndex;
+      entry.spent = true;
 
-      if (type === 'Ledger') this.ledger[outRef] = entry
-      else if (type === 'Mempool') this.mempool[outRef] = entry
-    })
+      if (type === "Ledger") this.ledger[outRef] = entry;
+      else if (type === "Mempool") this.mempool[outRef] = entry;
+    });
 
     withdrawalRequests.forEach(({ rewardAddress, withdrawal }) => {
-      this.chain[rewardAddress].delegation.rewards -= withdrawal
-    })
+      this.chain[rewardAddress].delegation.rewards -= withdrawal;
+    });
 
     certRequests.forEach(({ type, rewardAddress, poolId }) => {
       switch (type) {
-        case 'Registration': {
+        case "Registration": {
           if (this.chain[rewardAddress]) {
-            this.chain[rewardAddress].registeredStake = true
+            this.chain[rewardAddress].registeredStake = true;
           } else {
             this.chain[rewardAddress] = {
               registeredStake: true,
               delegation: { poolId: null, rewards: 0n },
-            }
+            };
           }
-          break
+          break;
         }
-        case 'Deregistration': {
-          this.chain[rewardAddress].registeredStake = false
-          this.chain[rewardAddress].delegation.poolId = null
-          break
+        case "Deregistration": {
+          this.chain[rewardAddress].registeredStake = false;
+          this.chain[rewardAddress].delegation.poolId = null;
+          break;
         }
-        case 'Delegation': {
-          this.chain[rewardAddress].delegation.poolId = poolId!
+        case "Delegation": {
+          this.chain[rewardAddress].delegation.poolId = poolId!;
         }
       }
-    })
+    });
 
     outputs.forEach(({ utxo, spent }) => {
       this.mempool[utxo.txHash + utxo.outputIndex] = {
         utxo,
         spent,
-      }
-    })
+      };
+    });
 
     for (const [datumHash, datum] of Object.entries(datumTable)) {
-      this.datumTable[datumHash] = datum
+      this.datumTable[datumHash] = datum;
     }
 
-    return Promise.resolve(txHash)
+    return Promise.resolve(txHash);
   }
 
   log() {
     function getRandomColor(unit: Unit) {
-      const seed = unit === 'lovelace' ? '1' : unit
+      const seed = unit === "lovelace" ? "1" : unit;
       // Convert the seed string to a number
-      let num = 0
+      let num = 0;
       for (let i = 0; i < seed.length; i++) {
-        num += seed.charCodeAt(i)
+        num += seed.charCodeAt(i);
       }
 
       // Generate a color based on the seed number
-      const r = (num * 123) % 256
-      const g = (num * 321) % 256
-      const b = (num * 213) % 256
+      const r = (num * 123) % 256;
+      const g = (num * 321) % 256;
+      const b = (num * 213) % 256;
 
       // Return the color as a hex string
-      return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
+      return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
 
-    const totalBalances: Assets = {}
+    const totalBalances: Assets = {};
 
-    const balances: Record<Address, Assets> = {}
+    const balances: Record<Address, Assets> = {};
     for (const { utxo } of Object.values(this.ledger)) {
       for (const [unit, quantity] of Object.entries(utxo.assets)) {
         if (!balances[utxo.address]) {
-          balances[utxo.address] = { [unit]: quantity }
+          balances[utxo.address] = { [unit]: quantity };
         } else if (!balances[utxo.address]?.[unit]) {
-          balances[utxo.address][unit] = quantity
+          balances[utxo.address][unit] = quantity;
         } else {
-          balances[utxo.address][unit] += quantity
+          balances[utxo.address][unit] += quantity;
         }
 
         if (!totalBalances[unit]) {
-          totalBalances[unit] = quantity
+          totalBalances[unit] = quantity;
         } else {
-          totalBalances[unit] += quantity
+          totalBalances[unit] += quantity;
         }
       }
     }
 
-    console.log('\n%cBlockchain state', 'color:purple')
+    console.log("\n%cBlockchain state", "color:purple");
     console.log(
       `
     Block height:   %c${this.blockHeight}%c
     Slot:           %c${this.slot}%c
     Unix time:      %c${this.time}
   `,
-      'color:yellow',
-      'color:white',
-      'color:yellow',
-      'color:white',
-      'color:yellow',
-    )
-    console.log('\n')
+      "color:yellow",
+      "color:white",
+      "color:yellow",
+      "color:white",
+      "color:yellow",
+    );
+    console.log("\n");
     for (const [address, assets] of Object.entries(balances)) {
-      console.log(`Address: %c${address}`, 'color:blue', '\n')
+      console.log(`Address: %c${address}`, "color:blue", "\n");
       for (const [unit, quantity] of Object.entries(assets)) {
         const barLength = Math.max(
           Math.floor(60 * (Number(quantity) / Number(totalBalances[unit]))),
           1,
-        )
+        );
         console.log(
-          `%c${'\u2586'.repeat(barLength) + ' '.repeat(60 - barLength)}`,
+          `%c${"\u2586".repeat(barLength) + " ".repeat(60 - barLength)}`,
           `color: ${getRandomColor(unit)}`,
-          '',
+          "",
           `${unit}:`,
           quantity,
-          '',
-        )
+          "",
+        );
       }
-      console.log(`\n${'\u2581'.repeat(60)}\n`)
+      console.log(`\n${"\u2581".repeat(60)}\n`);
     }
   }
 }

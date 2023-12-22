@@ -23,6 +23,7 @@
     "@emurgo/cardano-message-signing-nodejs": "^1.0.1",
     "@sinclair/typebox": "^0.31.28",
     "fast-check": "^3.14.0",
+    "prettier": "^3.1.1",
     "sha256": "^0.2.0",
     "uplc-node": "file:./uplc/pkg-node",
     "uplc-web": "file:./uplc/pkg-web"

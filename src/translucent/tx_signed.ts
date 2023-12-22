@@ -12,9 +12,9 @@ export class TxSigned {
   }
 
   async submit(): Promise<TxHash> {
-    return await (this.translucent.wallet || this.translucent.provider).submitTx(
-      toHex(this.txSigned.to_bytes()),
-    );
+    return await (
+      this.translucent.wallet || this.translucent.provider
+    ).submitTx(toHex(this.txSigned.to_bytes()));
   }
 
   /** Returns the transaction in Hex encoded Cbor. */

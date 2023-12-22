@@ -16,7 +16,8 @@ async function generateAccount(assets: Assets) {
   return {
     seedPhrase,
     address: await (await Translucent.new(undefined, "Custom"))
-      .selectWalletFromSeed(seedPhrase).wallet.address(),
+      .selectWalletFromSeed(seedPhrase)
+      .wallet.address(),
     assets,
   };
 }
@@ -46,17 +47,22 @@ it("Paid to address", async () => {
   const datum = Data.to(123n);
   const lovelace = 3000000n;
 
-  const tx = await translucent.newTx().payToAddressWithData(recipient, {
-    inline: datum,
-  }, { lovelace }).complete();
+  const tx = await translucent
+    .newTx()
+    .payToAddressWithData(
+      recipient,
+      {
+        inline: datum,
+      },
+      { lovelace },
+    )
+    .complete();
 
   const signedTx = await tx.sign().complete();
   const txHash = await signedTx.submit();
   await translucent.awaitTx(txHash);
 
-  const utxos = await translucent.utxosAt(
-    recipient,
-  );
+  const utxos = await translucent.utxosAt(recipient);
 
   expect(utxos.length).toEqual(1);
 
@@ -70,17 +76,19 @@ it("Missing vkey witness", async () => {
 
   const lovelace = 100000n;
 
-  const tx = await translucent.newTx().payToAddress(recipient, { lovelace })
+  const tx = await translucent
+    .newTx()
+    .payToAddress(recipient, { lovelace })
     .complete();
 
   const notSignedTx = await tx.complete();
   try {
     const txHash = await notSignedTx.submit();
     await translucent.awaitTx(txHash);
-    console.log("The tx was never signed. The vkey witness could not exist.")
-    expect(false).toEqual(false)
+    console.log("The tx was never signed. The vkey witness could not exist.");
+    expect(false).toEqual(false);
   } catch (_e) {
-    expect(true).toEqual(true)
+    expect(true).toEqual(true);
   }
 });
 
@@ -152,8 +160,11 @@ it("Reward withdrawal", async () => {
   });
   // Registration
   await translucent.awaitTx(
-    await (await (await translucent.newTx().registerStake(rewardAddress!).complete())
-      .sign().complete()).submit(),
+    await (
+      await (await translucent.newTx().registerStake(rewardAddress!).complete())
+        .sign()
+        .complete()
+    ).submit(),
   );
   emulator.distributeRewards(REWARD_AMOUNT);
   expect(await translucent.wallet.getDelegation()).toEqual({
@@ -162,9 +173,13 @@ it("Reward withdrawal", async () => {
   });
   // Delegation
   await translucent.awaitTx(
-    await (await (await translucent.newTx().delegateTo(rewardAddress!, poolId)
-      .complete())
-      .sign().complete()).submit(),
+    await (
+      await (
+        await translucent.newTx().delegateTo(rewardAddress!, poolId).complete()
+      )
+        .sign()
+        .complete()
+    ).submit(),
   );
   emulator.distributeRewards(REWARD_AMOUNT);
   expect(await translucent.wallet.getDelegation()).toEqual({
@@ -173,9 +188,13 @@ it("Reward withdrawal", async () => {
   });
   // Deregistration
   await translucent.awaitTx(
-    await (await (await translucent.newTx().deregisterStake(rewardAddress!)
-      .complete())
-      .sign().complete()).submit(),
+    await (
+      await (
+        await translucent.newTx().deregisterStake(rewardAddress!).complete()
+      )
+        .sign()
+        .complete()
+    ).submit(),
   );
   expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
@@ -183,9 +202,16 @@ it("Reward withdrawal", async () => {
   });
   // Withdrawal
   await translucent.awaitTx(
-    await (await (await translucent.newTx().withdraw(rewardAddress!, REWARD_AMOUNT)
-      .complete())
-      .sign().complete()).submit(),
+    await (
+      await (
+        await translucent
+          .newTx()
+          .withdraw(rewardAddress!, REWARD_AMOUNT)
+          .complete()
+      )
+        .sign()
+        .complete()
+    ).submit(),
   );
   expect(await translucent.wallet.getDelegation()).toEqual({
     poolId: null,
@@ -198,11 +224,18 @@ it("Evaluate a contract", async () => {
     type: "PlutusV2",
     script: "49480100002221200101",
   };
-  const scriptAddress = translucent.utils.validatorToAddress(alwaysSucceedScript);
+  const scriptAddress =
+    translucent.utils.validatorToAddress(alwaysSucceedScript);
 
-  const tx = await translucent.newTx().payToContract(scriptAddress, {
-    inline: Data.void(),
-  }, { lovelace: 50000000n })
+  const tx = await translucent
+    .newTx()
+    .payToContract(
+      scriptAddress,
+      {
+        inline: Data.void(),
+      },
+      { lovelace: 50000000n },
+    )
     .complete();
   const signedTx = await tx.sign().complete();
   const txHash = await signedTx.submit();
@@ -211,18 +244,25 @@ it("Evaluate a contract", async () => {
   const scriptUtxos = await translucent.utxosAt(scriptAddress);
 
   expect(scriptUtxos.length).toEqual(1);
-  const _txHash =
-    await (await (await translucent.newTx().collectFrom(scriptUtxos, Data.void())
-      .attachSpendingValidator(alwaysSucceedScript)
-      .complete()).sign().complete()).submit();
+  const _txHash = await (
+    await (
+      await translucent
+        .newTx()
+        .collectFrom(scriptUtxos, Data.void())
+        .attachSpendingValidator(alwaysSucceedScript)
+        .complete()
+    )
+      .sign()
+      .complete()
+  ).submit();
   emulator.awaitSlot(100);
 });
 
 it("Check required signer", async () => {
-  const tx = await translucent.newTx().addSigner(ACCOUNT_1.address).payToAddress(
-    ACCOUNT_1.address,
-    { lovelace: 5000000n },
-  )
+  const tx = await translucent
+    .newTx()
+    .addSigner(ACCOUNT_1.address)
+    .payToAddress(ACCOUNT_1.address, { lovelace: 5000000n })
     .complete();
   await tx.partialSign();
   translucent.selectWalletFromSeed(ACCOUNT_1.seedPhrase);

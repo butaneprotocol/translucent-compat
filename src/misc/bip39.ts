@@ -65,8 +65,10 @@ function randomBytes(size: number): Uint8Array {
     throw new RangeError("requested too many random bytes");
   }
 
-  if (size > 0) { // getRandomValues fails on IE if size == 0
-    if (size > MAX_BYTES) { // this is the max bytes crypto.getRandomValues
+  if (size > 0) {
+    // getRandomValues fails on IE if size == 0
+    if (size > MAX_BYTES) {
+      // this is the max bytes crypto.getRandomValues
       // can do at once see https://developer.mozilla.org/en-US/docs/Web/API/window.crypto.getRandomValues
       for (let generated = 0; generated < size; generated += MAX_BYTES) {
         // buffer.slice automatically checks if the end is past the end of

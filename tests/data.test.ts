@@ -15,10 +15,7 @@ it("Roundtrip data bigint", () => {
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
   const datum: MyDatum = 1234n;
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 });
 
@@ -37,10 +34,7 @@ it("Roundtrip data string", () => {
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
   const datum: MyDatum = "31313131"; //hex
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 });
 
@@ -59,10 +53,7 @@ it("Roundtrip data boolean", () => {
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
   const datum: MyDatum = true;
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 });
 
@@ -93,20 +84,14 @@ it("Roundtrip data object", () => {
     myVariableA: "313131",
     myVariableB: 5555n,
   };
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 
   const datumNullable: MyDatum = {
     myVariableA: "313131",
     myVariableB: null,
   };
-  const newDatumNullable = Data.from(
-    Data.to(datumNullable, MyDatum),
-    MyDatum,
-  );
+  const newDatumNullable = Data.from(Data.to(datumNullable, MyDatum), MyDatum);
 
   expect(datumNullable).toEqual(newDatumNullable);
 });
@@ -129,10 +114,7 @@ it("Roundtrip data array", () => {
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
   const datum: MyDatum = [45n, 100n, 9994n, 4281958210985912095n];
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 });
 
@@ -150,14 +132,11 @@ it("Roundtrip data map", () => {
   type MyDatum = Data.Static<typeof MyDatumSchema>;
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
-  const datum: MyDatum = new Map([[3209n, "3131"], [
-    249218490182n,
-    "32323232",
-  ]]);
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const datum: MyDatum = new Map([
+    [3209n, "3131"],
+    [249218490182n, "32323232"],
+  ]);
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 });
 
@@ -187,17 +166,11 @@ it("Roundtrip data enum", () => {
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
   const datumLeft: MyDatum = "Left";
-  const newDatumLeft = Data.from(
-    Data.to(datumLeft, MyDatum),
-    MyDatum,
-  );
+  const newDatumLeft = Data.from(Data.to(datumLeft, MyDatum), MyDatum);
   expect(datumLeft as MyDatum).toEqual(newDatumLeft);
 
   const datumUp: MyDatum = { Up: ["313131"] };
-  const newDatumUp = Data.from(
-    Data.to(datumUp, MyDatum),
-    MyDatum,
-  );
+  const newDatumUp = Data.from(Data.to(datumUp, MyDatum), MyDatum);
   expect(datumUp as MyDatum).toEqual(newDatumUp);
 });
 
@@ -226,21 +199,15 @@ it("Roundtrip data enum with named args", () => {
   const MyDatum = MyDatumSchema as unknown as MyDatum;
 
   const datumLeft: MyDatum = "Left";
-  const newDatumLeft = Data.from(
-    Data.to(datumLeft, MyDatum),
-    MyDatum,
-  );
+  const newDatumLeft = Data.from(Data.to(datumLeft, MyDatum), MyDatum);
   expect(datumLeft as MyDatum).toEqual(newDatumLeft);
 
   const datumUp: MyDatum = { Up: { x: 100n, y: "3131" } };
-  const newDatumUp = Data.from(
-    Data.to(datumUp, MyDatum),
-    MyDatum,
-  );
+  const newDatumUp = Data.from(Data.to(datumUp, MyDatum), MyDatum);
   expect(datumUp as MyDatum).toEqual(newDatumUp);
-  expect(
-    Data.to({ Up: { x: 100n, y: "3131" } }, MyDatum),
-  ).toEqual(Data.to({ Up: { y: "3131", x: 100n } }, MyDatum));
+  expect(Data.to({ Up: { x: 100n, y: "3131" } }, MyDatum)).toEqual(
+    Data.to({ Up: { y: "3131", x: 100n } }, MyDatum),
+  );
 });
 
 it("Roundtrip data any", () => {
@@ -294,10 +261,7 @@ it("Roundtrip data tuple", () => {
   type MyDatum = Data.Static<typeof MyDatumSchema>;
   const MyDatum = MyDatumSchema as unknown as MyDatum;
   const datum: MyDatum = [123n, "313131"];
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum).toEqual(newDatum);
 });
 
@@ -336,14 +300,18 @@ it("Complex data structure", () => {
   type MyDatum = Data.Static<typeof MyDatumSchema>;
   const MyDatum = MyDatumSchema as unknown as MyDatum;
   const datum: MyDatum = {
-    Up: [[{ someVariable: null }, { someVariable: 123n }, {
-      someVariable: 9990324235325n,
-    }], "3131"],
+    Up: [
+      [
+        { someVariable: null },
+        { someVariable: 123n },
+        {
+          someVariable: 9990324235325n,
+        },
+      ],
+      "3131",
+    ],
   };
-  const newDatum = Data.from(
-    Data.to(datum, MyDatum),
-    MyDatum,
-  );
+  const newDatum = Data.from(Data.to(datum, MyDatum), MyDatum);
   expect(datum as MyDatum).toEqual(newDatum);
 });
 
@@ -379,15 +347,10 @@ it("Apply params to script", () => {
   try {
     const mintingPolicy = {
       type: "PlutusV2",
-      script: applyParamsToScript(
-        script,
-        [10n],
-      ),
+      script: applyParamsToScript(script, [10n]),
     };
     expect(mintingPolicy).toBeTruthy();
   } catch (e) {
-    expect(false).toBeTruthy()
+    expect(false).toBeTruthy();
   }
 });
-
-

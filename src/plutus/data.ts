@@ -38,14 +38,12 @@ export type Data =
 export const Data = {
   // Types
   // Note: Recursive types are not supported (yet)
-  Integer: function (
-    options?: {
-      minimum?: number;
-      maximum?: number;
-      exclusiveMinimum?: number;
-      exclusiveMaximum?: number;
-    },
-  ) {
+  Integer: function (options?: {
+    minimum?: number;
+    maximum?: number;
+    exclusiveMinimum?: number;
+    exclusiveMaximum?: number;
+  }) {
     const integer = Type.Unsafe<bigint>({ dataType: "integer" });
     if (options) {
       Object.entries(options).forEach(([key, value]) => {
@@ -54,9 +52,11 @@ export const Data = {
     }
     return integer;
   },
-  Bytes: function (
-    options?: { minLength?: number; maxLength?: number; enum?: string[] },
-  ) {
+  Bytes: function (options?: {
+    minLength?: number;
+    maxLength?: number;
+    enum?: string[];
+  }) {
     const bytes = Type.Unsafe<string>({ dataType: "bytes" });
     if (options) {
       Object.entries(options).forEach(([key, value]) => {
@@ -126,37 +126,37 @@ export const Data = {
   ) {
     const object = Type.Object(properties);
     replaceProperties(object, {
-      anyOf: [{
-        dataType: "constructor",
-        index: 0, // Will be replaced when using Data.Enum
-        fields: Object.entries(properties).map(([title, p]) => ({
-          ...p,
-          title,
-        })),
-      }],
+      anyOf: [
+        {
+          dataType: "constructor",
+          index: 0, // Will be replaced when using Data.Enum
+          fields: Object.entries(properties).map(([title, p]) => ({
+            ...p,
+            title,
+          })),
+        },
+      ],
     });
-    object.anyOf[0].hasConstr = typeof options?.hasConstr === "undefined" ||
-      options.hasConstr;
+    object.anyOf[0].hasConstr =
+      typeof options?.hasConstr === "undefined" || options.hasConstr;
     return object;
   },
   Enum: function <T extends TSchema>(items: T[]) {
     const union = Type.Union(items);
-    replaceProperties(
-      union,
-      {
-        anyOf: items.map((item, index) =>
-          item.anyOf[0].fields.length === 0
-            ? ({
+    replaceProperties(union, {
+      anyOf: items.map((item, index) =>
+        item.anyOf[0].fields.length === 0
+          ? {
               ...item.anyOf[0],
               index,
-            })
-            : ({
+            }
+          : {
               dataType: "constructor",
               title: (() => {
                 const title = item.anyOf[0].fields[0].title;
                 if (
                   (title as string).charAt(0) !==
-                    (title as string).charAt(0).toUpperCase()
+                  (title as string).charAt(0).toUpperCase()
                 ) {
                   throw new Error(
                     `Enum '${title}' needs to start with an uppercase letter.`,
@@ -165,12 +165,12 @@ export const Data = {
                 return item.anyOf[0].fields[0].title;
               })(),
               index,
-              fields: item.anyOf[0].fields[0].items ||
+              fields:
+                item.anyOf[0].fields[0].items ||
                 item.anyOf[0].fields[0].anyOf[0].fields,
-            })
-        ),
-      },
-    );
+            },
+      ),
+    });
     return union;
   },
   /**
@@ -203,12 +203,14 @@ export const Data = {
     }
     const literal = Type.Literal(title);
     replaceProperties(literal, {
-      anyOf: [{
-        dataType: "constructor",
-        title,
-        index: 0, // Will be replaced in Data.Enum
-        fields: [],
-      }],
+      anyOf: [
+        {
+          dataType: "constructor",
+          title,
+          index: 0, // Will be replaced in Data.Enum
+          fields: [],
+        },
+      ],
     });
     return literal;
   },
@@ -220,9 +222,7 @@ export const Data = {
           description: "An optional value.",
           dataType: "constructor",
           index: 0,
-          fields: [
-            item,
-          ],
+          fields: [item],
         },
         {
           title: "None",
@@ -265,9 +265,7 @@ export const Data = {
 function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
   function serialize(data: Data): C.PlutusData {
     try {
-      if (
-        typeof data === "bigint"
-      ) {
+      if (typeof data === "bigint") {
         return C.PlutusData.new_integer(C.BigInt.from_str(data.toString()));
       } else if (typeof data === "string") {
         return C.PlutusData.new_bytes(fromHex(data));
@@ -303,7 +301,7 @@ function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
       throw new Error("Could not serialize the data: " + error);
     }
   }
-  const d = type ? castTo<T>(data, type) : data as Data;
+  const d = type ? castTo<T>(data, type) : (data as Data);
   return toHex(serialize(d).to_bytes()) as Datum | Redeemer;
 }
 
@@ -345,7 +343,7 @@ function from<T = Data>(raw: Datum | Redeemer, type?: T): T {
   }
   const data = deserialize(C.PlutusData.from_bytes(fromHex(raw)));
 
-  return type ? castFrom<T>(data, type) : data as T;
+  return type ? castFrom<T>(data, type) : (data as T);
 }
 
 /**
@@ -386,9 +384,8 @@ function toJson(plutusData: Data): Json {
         !isNaN(parseInt(data)) &&
         data.slice(-1) === "n")
     ) {
-      const bigint = typeof data === "string"
-        ? BigInt(data.slice(0, -1))
-        : data;
+      const bigint =
+        typeof data === "string" ? BigInt(data.slice(0, -1)) : data;
       return parseInt(bigint.toString());
     }
     if (typeof data === "string") {
@@ -447,14 +444,16 @@ function castFrom<T = Data>(data: Data, type: T): T {
     case "constructor": {
       if (isVoid(shape)) {
         if (
-          !(data instanceof Constr) || data.index !== 0 ||
+          !(data instanceof Constr) ||
+          data.index !== 0 ||
           data.fields.length !== 0
         ) {
           throw new Error("Could not type cast to void.");
         }
         return undefined as T;
       } else if (
-        data instanceof Constr && data.index === shape.index &&
+        data instanceof Constr &&
+        data.index === shape.index &&
         (shape.hasConstr || shape.hasConstr === undefined)
       ) {
         const fields: Record<string, T> = {};
@@ -463,43 +462,34 @@ function castFrom<T = Data>(data: Data, type: T): T {
             "Could not type cast to object. Fields do not match.",
           );
         }
-        shape.fields.forEach(
-          (field: Json, fieldIndex: number) => {
-            const title = field.title || "wrapper";
-            if ((/[A-Z]/.test(title[0]))) {
-              throw new Error(
-                "Could not type cast to object. Object properties need to start with a lowercase letter.",
-              );
-            }
-            fields[title] = castFrom<T>(
-              data.fields[fieldIndex],
-              field,
+        shape.fields.forEach((field: Json, fieldIndex: number) => {
+          const title = field.title || "wrapper";
+          if (/[A-Z]/.test(title[0])) {
+            throw new Error(
+              "Could not type cast to object. Object properties need to start with a lowercase letter.",
             );
-          },
-        );
+          }
+          fields[title] = castFrom<T>(data.fields[fieldIndex], field);
+        });
         return fields as T;
       } else if (
-        data instanceof Array && !shape.hasConstr &&
+        data instanceof Array &&
+        !shape.hasConstr &&
         shape.hasConstr !== undefined
       ) {
         const fields: Record<string, T> = {};
         if (shape.fields.length !== data.length) {
           throw new Error("Could not ype cast to object. Fields do not match.");
         }
-        shape.fields.forEach(
-          (field: Json, fieldIndex: number) => {
-            const title = field.title || "wrapper";
-            if ((/[A-Z]/.test(title[0]))) {
-              throw new Error(
-                "Could not type cast to object. Object properties need to start with a lowercase letter.",
-              );
-            }
-            fields[title] = castFrom<T>(
-              data[fieldIndex],
-              field,
+        shape.fields.forEach((field: Json, fieldIndex: number) => {
+          const title = field.title || "wrapper";
+          if (/[A-Z]/.test(title[0])) {
+            throw new Error(
+              "Could not type cast to object. Object properties need to start with a lowercase letter.",
             );
-          },
-        );
+          }
+          fields[title] = castFrom<T>(data[fieldIndex], field);
+        });
         return fields as T;
       }
       throw new Error("Could not type cast to object.");
@@ -514,8 +504,8 @@ function castFrom<T = Data>(data: Data, type: T): T {
         throw new Error("Could not type cast to enum.");
       }
 
-      const enumShape = shape.anyOf.find((entry: Json) =>
-        entry.index === data.index
+      const enumShape = shape.anyOf.find(
+        (entry: Json) => entry.index === data.index,
       );
       if (!enumShape || enumShape.fields.length !== data.fields.length) {
         throw new Error("Could not type cast to enum.");
@@ -534,17 +524,13 @@ function castFrom<T = Data>(data: Data, type: T): T {
       } else if (isNullable(shape)) {
         switch (data.index) {
           case 0: {
-            if (
-              data.fields.length !== 1
-            ) {
+            if (data.fields.length !== 1) {
               throw new Error("Could not type cast to nullable object.");
             }
             return castFrom<T>(data.fields[0], shape.anyOf[0].fields[0]);
           }
           case 1: {
-            if (
-              data.fields.length !== 0
-            ) {
+            if (data.fields.length !== 0) {
               throw new Error("Could not type cast to nullable object.");
             }
             return null as T;
@@ -555,14 +541,12 @@ function castFrom<T = Data>(data: Data, type: T): T {
       switch (enumShape.dataType) {
         case "constructor": {
           if (enumShape.fields.length === 0) {
-            if (
-              /[A-Z]/.test(enumShape.title[0])
-            ) {
+            if (/[A-Z]/.test(enumShape.title[0])) {
               return enumShape.title as T;
             }
             throw new Error("Could not type cast to enum.");
           } else {
-            if (!(/[A-Z]/.test(enumShape.title))) {
+            if (!/[A-Z]/.test(enumShape.title)) {
               throw new Error(
                 "Could not type cast to enum. Enums need to start with an uppercase letter.",
               );
@@ -574,14 +558,15 @@ function castFrom<T = Data>(data: Data, type: T): T {
 
             // check if named args
             const args = enumShape.fields[0].title
-              ? Object.fromEntries(enumShape.fields.map((
-                field: Json,
-                index: number,
-              ) => [field.title, castFrom<T>(data.fields[index], field)]))
-              : enumShape.fields.map((
-                field: Json,
-                index: number,
-              ) => castFrom<T>(data.fields[index], field));
+              ? Object.fromEntries(
+                  enumShape.fields.map((field: Json, index: number) => [
+                    field.title,
+                    castFrom<T>(data.fields[index], field),
+                  ]),
+                )
+              : enumShape.fields.map((field: Json, index: number) =>
+                  castFrom<T>(data.fields[index], field),
+                );
 
             return {
               [enumShape.title]: args,
@@ -594,17 +579,13 @@ function castFrom<T = Data>(data: Data, type: T): T {
     case "list": {
       if (shape.items instanceof Array) {
         // tuple
-        if (
-          data instanceof Constr &&
-          data.index === 0 &&
-          shape.hasConstr
-        ) {
+        if (data instanceof Constr && data.index === 0 && shape.hasConstr) {
           return data.fields.map((field, index) =>
-            castFrom<T>(field, shape.items[index])
+            castFrom<T>(field, shape.items[index]),
           ) as T;
         } else if (data instanceof Array && !shape.hasConstr) {
           return data.map((field, index) =>
-            castFrom<T>(field, shape.items[index])
+            castFrom<T>(field, shape.items[index]),
           ) as T;
         }
 
@@ -625,10 +606,7 @@ function castFrom<T = Data>(data: Data, type: T): T {
       }
       mapConstraints(data, shape);
       const map = new Map();
-      for (
-        const [key, value] of (data)
-          .entries()
-      ) {
+      for (const [key, value] of data.entries()) {
         map.set(castFrom<T>(key, shape.keys), castFrom<T>(value, shape.values));
       }
       return map as T;
@@ -667,7 +645,8 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
         }
         return new Constr(0, []);
       } else if (
-        typeof struct !== "object" || struct === null ||
+        typeof struct !== "object" ||
+        struct === null ||
         shape.fields.length !== Object.keys(struct).length
       ) {
         throw new Error("Could not type cast to constructor.");
@@ -676,9 +655,9 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
         castTo<T>(
           (struct as Record<string, Json>)[field.title || "wrapper"],
           field,
-        )
+        ),
       );
-      return (shape.hasConstr || shape.hasConstr === undefined)
+      return shape.hasConstr || shape.hasConstr === undefined
         ? new Constr(shape.index, fields)
         : fields;
     }
@@ -690,9 +669,7 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
 
       if (isBoolean(shape)) {
         if (typeof struct !== "boolean") {
-          throw new Error(
-            "Could not type cast to boolean.",
-          );
+          throw new Error("Could not type cast to boolean.");
         }
         return new Constr(struct ? 1 : 0, []);
       } else if (isNullable(shape)) {
@@ -702,24 +679,21 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
           if (fields.length !== 1) {
             throw new Error("Could not type cast to nullable object.");
           }
-          return new Constr(0, [
-            castTo<T>(struct, fields[0]),
-          ]);
+          return new Constr(0, [castTo<T>(struct, fields[0])]);
         }
       }
       switch (typeof struct) {
         case "string": {
-          if (!(/[A-Z]/.test(struct[0]))) {
+          if (!/[A-Z]/.test(struct[0])) {
             throw new Error(
               "Could not type cast to enum. Enum needs to start with an uppercase letter.",
             );
           }
-          const enumIndex = (shape as TEnum).anyOf.findIndex((
-            s: TLiteral,
-          ) =>
-            s.dataType === "constructor" &&
-            s.fields.length === 0 &&
-            s.title === struct
+          const enumIndex = (shape as TEnum).anyOf.findIndex(
+            (s: TLiteral) =>
+              s.dataType === "constructor" &&
+              s.fields.length === 0 &&
+              s.title === struct,
           );
           if (enumIndex === -1) throw new Error("Could not type cast to enum.");
           return new Constr(enumIndex, []);
@@ -728,14 +702,14 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
           if (struct === null) throw new Error("Could not type cast to enum.");
           const structTitle = Object.keys(struct)[0];
 
-          if (!(/[A-Z]/.test(structTitle))) {
+          if (!/[A-Z]/.test(structTitle)) {
             throw new Error(
               "Could not type cast to enum. Enum needs to start with an uppercase letter.",
             );
           }
-          const enumEntry = shape.anyOf.find((s: Json) =>
-            s.dataType === "constructor" &&
-            s.title === structTitle
+          const enumEntry = shape.anyOf.find(
+            (s: Json) =>
+              s.dataType === "constructor" && s.title === structTitle,
           );
 
           if (!enumEntry) throw new Error("Could not type cast to enum.");
@@ -747,16 +721,14 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
             // check if named args
             args instanceof Array
               ? args.map((item, index) =>
-                castTo<T>(item, enumEntry.fields[index])
-              )
-              : enumEntry.fields.map(
-                (entry: Json) => {
-                  const [_, item]: [string, Json] = Object.entries(args).find((
-                    [title],
-                  ) => title === entry.title)!;
+                  castTo<T>(item, enumEntry.fields[index]),
+                )
+              : enumEntry.fields.map((entry: Json) => {
+                  const [_, item]: [string, Json] = Object.entries(args).find(
+                    ([title]) => title === entry.title,
+                  )!;
                   return castTo<T>(item, entry);
-                },
-              ),
+                }),
           );
         }
       }
@@ -769,7 +741,7 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
       if (shape.items instanceof Array) {
         // tuple
         const fields = struct.map((item, index) =>
-          castTo<T>(item, shape.items[index])
+          castTo<T>(item, shape.items[index]),
         );
         return shape.hasConstr ? new Constr(0, fields) : fields;
       } else {
@@ -786,10 +758,7 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
       mapConstraints(struct, shape);
 
       const map = new Map<Data, Data>();
-      for (
-        const [key, value] of (struct)
-          .entries()
-      ) {
+      for (const [key, value] of struct.entries()) {
         map.set(castTo<T>(key, shape.keys), castTo<T>(value, shape.values));
       }
       return map;
@@ -825,9 +794,8 @@ function integerConstraints(integer: bigint, shape: TSchema) {
 }
 
 function bytesConstraints(bytes: string, shape: TSchema) {
-  if (
-    shape.enum && !shape.enum.some((keyword: string) => keyword === bytes)
-  ) throw new Error(`None of the keywords match with '${bytes}'.`);
+  if (shape.enum && !shape.enum.some((keyword: string) => keyword === bytes))
+    throw new Error(`None of the keywords match with '${bytes}'.`);
   if (shape.minLength && bytes.length / 2 < shape.minLength) {
     throw new Error(
       `Bytes need to have a length of at least ${shape.minLength} bytes.`,
@@ -843,40 +811,33 @@ function bytesConstraints(bytes: string, shape: TSchema) {
 
 function listConstraints(list: Array<unknown>, shape: TSchema) {
   if (shape.minItems && list.length < shape.minItems) {
-    throw new Error(
-      `Array needs to contain at least ${shape.minItems} items.`,
-    );
+    throw new Error(`Array needs to contain at least ${shape.minItems} items.`);
   }
   if (shape.maxItems && list.length > shape.maxItems) {
-    throw new Error(
-      `Array can contain at most ${shape.maxItems} items.`,
-    );
+    throw new Error(`Array can contain at most ${shape.maxItems} items.`);
   }
-  if (shape.uniqueItems && (new Set(list)).size !== list.length) {
+  if (shape.uniqueItems && new Set(list).size !== list.length) {
     // Note this only works for primitive types like string and bigint.
-    throw new Error(
-      "Array constains duplicates.",
-    );
+    throw new Error("Array constains duplicates.");
   }
 }
 
 function mapConstraints(map: Map<unknown, unknown>, shape: TSchema) {
   if (shape.minItems && map.size < shape.minItems) {
-    throw new Error(
-      `Map needs to contain at least ${shape.minItems} items.`,
-    );
+    throw new Error(`Map needs to contain at least ${shape.minItems} items.`);
   }
 
   if (shape.maxItems && map.size > shape.maxItems) {
-    throw new Error(
-      `Map can contain at most ${shape.maxItems} items.`,
-    );
+    throw new Error(`Map can contain at most ${shape.maxItems} items.`);
   }
 }
 
 function isBoolean(shape: TSchema): boolean {
-  return shape.anyOf && shape.anyOf[0]?.title === "False" &&
-    shape.anyOf[1]?.title === "True";
+  return (
+    shape.anyOf &&
+    shape.anyOf[0]?.title === "False" &&
+    shape.anyOf[1]?.title === "True"
+  );
 }
 
 function isVoid(shape: TSchema): boolean {
@@ -884,8 +845,11 @@ function isVoid(shape: TSchema): boolean {
 }
 
 function isNullable(shape: TSchema): boolean {
-  return shape.anyOf && shape.anyOf[0]?.title === "Some" &&
-    shape.anyOf[1]?.title === "None";
+  return (
+    shape.anyOf &&
+    shape.anyOf[0]?.title === "Some" &&
+    shape.anyOf[1]?.title === "None"
+  );
 }
 
 function replaceProperties(object: Json, properties: Json) {

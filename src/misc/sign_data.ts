@@ -16,27 +16,16 @@ export function signData(
 ): SignedMessage {
   const protectedHeaders = M.HeaderMap.new();
   protectedHeaders.set_algorithm_id(
-    M.Label.from_algorithm_id(
-      M.AlgorithmId.EdDSA,
-    ),
+    M.Label.from_algorithm_id(M.AlgorithmId.EdDSA),
   );
   protectedHeaders.set_header(
     M.Label.new_text("address"),
     M.CBORValue.new_bytes(fromHex(addressHex)),
   );
-  const protectedSerialized = M.ProtectedHeaderMap.new(
-    protectedHeaders,
-  );
+  const protectedSerialized = M.ProtectedHeaderMap.new(protectedHeaders);
   const unprotectedHeaders = M.HeaderMap.new();
-  const headers = M.Headers.new(
-    protectedSerialized,
-    unprotectedHeaders,
-  );
-  const builder = M.COSESign1Builder.new(
-    headers,
-    fromHex(payload),
-    false,
-  );
+  const headers = M.Headers.new(protectedSerialized, unprotectedHeaders);
+  const builder = M.COSESign1Builder.new(headers, fromHex(payload), false);
   const toSign = builder.make_data_to_sign().to_bytes();
 
   const priv = C.PrivateKey.from_bech32(privateKey);
@@ -47,27 +36,15 @@ export function signData(
   const key = M.COSEKey.new(
     M.Label.from_key_type(M.KeyType.OKP), //OKP
   );
-  key.set_algorithm_id(
-    M.Label.from_algorithm_id(
-      M.AlgorithmId.EdDSA,
-    ),
-  );
+  key.set_algorithm_id(M.Label.from_algorithm_id(M.AlgorithmId.EdDSA));
   key.set_header(
-    M.Label.new_int(
-      M.Int.new_negative(
-        M.BigNum.from_str("1"),
-      ),
-    ),
+    M.Label.new_int(M.Int.new_negative(M.BigNum.from_str("1"))),
     M.CBORValue.new_int(
       M.Int.new_i32(6), //M.CurveType.Ed25519
     ),
   ); // crv (-1) set to Ed25519 (6)
   key.set_header(
-    M.Label.new_int(
-      M.Int.new_negative(
-        M.BigNum.from_str("2"),
-      ),
-    ),
+    M.Label.new_int(M.Int.new_negative(M.BigNum.from_str("2"))),
     M.CBORValue.new_bytes(priv.to_public().as_bytes()),
   ); // x (-2) set to public key
 
@@ -86,8 +63,7 @@ export function verifyData(
   const cose1 = M.COSESign1.from_bytes(fromHex(signedMessage.signature));
   const key = M.COSEKey.from_bytes(fromHex(signedMessage.key));
 
-  const protectedHeaders = cose1.headers().protected()
-    .deserialized_headers();
+  const protectedHeaders = cose1.headers().protected().deserialized_headers();
 
   const cose1Address = (() => {
     try {
@@ -121,11 +97,9 @@ export function verifyData(
 
   const keyCurve = (() => {
     try {
-      const int = key.header(M.Label.new_int(
-        M.Int.new_negative(
-          M.BigNum.from_str("1"),
-        ),
-      ))?.as_int();
+      const int = key
+        .header(M.Label.new_int(M.Int.new_negative(M.BigNum.from_str("1"))))
+        ?.as_int();
       if (int?.is_positive()) return parseInt(int.as_positive()?.to_str()!);
       return parseInt(int?.as_negative()?.to_str()!);
     } catch (_e) {
@@ -146,11 +120,9 @@ export function verifyData(
   const publicKey = (() => {
     try {
       return C.PublicKey.from_bytes(
-        key.header(M.Label.new_int(
-          M.Int.new_negative(
-            M.BigNum.from_str("2"),
-          ),
-        ))?.as_bytes()!,
+        key
+          .header(M.Label.new_int(M.Int.new_negative(M.BigNum.from_str("2"))))
+          ?.as_bytes()!,
       );
     } catch (_e) {
       throw new Error("No public key found.");

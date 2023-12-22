@@ -48,7 +48,10 @@ export class Translucent {
   network: Network = "Mainnet";
   utils!: Utils;
 
-  static async new(provider?: Provider, network?: Network): Promise<Translucent> {
+  static async new(
+    provider?: Provider,
+    network?: Network,
+  ): Promise<Translucent> {
     const translucent = new this();
     if (network) translucent.network = network;
     if (provider) {
@@ -85,10 +88,18 @@ export class Translucent {
         .max_value_size(protocolParameters.maxValSize)
         .collateral_percentage(protocolParameters.collateralPercentage)
         .max_collateral_inputs(protocolParameters.maxCollateralInputs)
-        .ex_unit_prices(C.ExUnitPrices.new(
-              C.UnitInterval.new(C.BigNum.from_str(protocolParameters.priceMem[0].toString()), C.BigNum.from_str(protocolParameters.priceMem[1].toString())),
-              C.UnitInterval.new(C.BigNum.from_str(protocolParameters.priceStep[0].toString()), C.BigNum.from_str(protocolParameters.priceStep[1].toString())),
-          ))
+        .ex_unit_prices(
+          C.ExUnitPrices.new(
+            C.UnitInterval.new(
+              C.BigNum.from_str(protocolParameters.priceMem[0].toString()),
+              C.BigNum.from_str(protocolParameters.priceMem[1].toString()),
+            ),
+            C.UnitInterval.new(
+              C.BigNum.from_str(protocolParameters.priceStep[0].toString()),
+              C.BigNum.from_str(protocolParameters.priceStep[1].toString()),
+            ),
+          ),
+        )
         .costmdls(createCostModels(protocolParameters.costModels))
         .build();
     }
@@ -100,14 +111,14 @@ export class Translucent {
    * Switch provider and/or network.
    * If provider or network unset, no overwriting happens. Provider or network from current instance are taken then.
    */
-  async switchProvider(provider?: Provider, network?: Network): Promise<Translucent> {
+  async switchProvider(
+    provider?: Provider,
+    network?: Network,
+  ): Promise<Translucent> {
     if (this.network === "Custom") {
       throw new Error("Cannot switch when on custom network.");
     }
-    const translucent = await Translucent.new(
-      provider,
-      network,
-    );
+    const translucent = await Translucent.new(provider, network);
     this.txBuilderConfig = translucent.txBuilderConfig;
     this.provider = provider || this.provider;
     this.network = network || this.network;
@@ -134,10 +145,11 @@ export class Translucent {
     payload: Payload,
     signedMessage: SignedMessage,
   ): boolean {
-    const { paymentCredential, stakeCredential, address: { hex: addressHex } } =
-      this.utils.getAddressDetails(
-        address,
-      );
+    const {
+      paymentCredential,
+      stakeCredential,
+      address: { hex: addressHex },
+    } = this.utils.getAddressDetails(address);
     const keyHash = paymentCredential?.hash || stakeCredential?.hash;
     if (!keyHash) throw new Error("Not a valid address provided.");
 
@@ -194,7 +206,7 @@ export class Translucent {
       case 333:
       case 444: {
         const utxo = await this.utxoByUnit(toUnit(policyId, name, 100));
-        const metadata = await this.datumOf(utxo) as Constr<Data>;
+        const metadata = (await this.datumOf(utxo)) as Constr<Data>;
         return Data.toJson(metadata.fields[0]);
       }
       default:
@@ -241,9 +253,7 @@ export class Translucent {
         return { poolId: null, rewards: 0n };
       },
       // deno-lint-ignore require-await
-      signTx: async (
-        tx: C.Transaction,
-      ): Promise<C.TransactionWitnessSet> => {
+      signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
         const witness = C.make_vkey_witness(
           C.hash_transaction(tx.body()),
           priv,
@@ -257,8 +267,10 @@ export class Translucent {
         address: Address | RewardAddress,
         payload: Payload,
       ): Promise<SignedMessage> => {
-        const { paymentCredential, address: { hex: hexAddress } } = this.utils
-          .getAddressDetails(address);
+        const {
+          paymentCredential,
+          address: { hex: hexAddress },
+        } = this.utils.getAddressDetails(address);
         const keyHash = paymentCredential?.hash;
 
         const originalKeyHash = pubKeyHash.to_hex();
@@ -287,17 +299,17 @@ export class Translucent {
 
     this.wallet = {
       address: async (): Promise<Address> =>
-        C.Address.from_bytes(
-          fromHex(await getAddressHex()),
-        ).to_bech32(undefined),
+        C.Address.from_bytes(fromHex(await getAddressHex())).to_bech32(
+          undefined,
+        ),
       rewardAddress: async (): Promise<RewardAddress | null> => {
         const [rewardAddressHex] = await api.getRewardAddresses();
         const rewardAddress = rewardAddressHex
           ? C.RewardAddress.from_address(
-            C.Address.from_bytes(fromHex(rewardAddressHex)),
-          )!
-            .to_address()
-            .to_bech32(undefined)
+              C.Address.from_bytes(fromHex(rewardAddressHex)),
+            )!
+              .to_address()
+              .to_bech32(undefined)
           : null;
         return rewardAddress;
       },
@@ -324,9 +336,7 @@ export class Translucent {
           ? await this.delegationAt(rewardAddr)
           : { poolId: null, rewards: 0n };
       },
-      signTx: async (
-        tx: C.Transaction,
-      ): Promise<C.TransactionWitnessSet> => {
+      signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
         const witnessSet = await api.signTx(toHex(tx.to_bytes()), true);
         return C.TransactionWitnessSet.from_bytes(fromHex(witnessSet));
       },
@@ -360,30 +370,31 @@ export class Translucent {
       address: async (): Promise<Address> => address,
       // deno-lint-ignore require-await
       rewardAddress: async (): Promise<RewardAddress | null> => {
-        const rewardAddr = !rewardAddress && addressDetails.stakeCredential
-          ? (() => {
-            if (addressDetails.stakeCredential.type === "Key") {
-              return C.RewardAddress.new(
-                this.network === "Mainnet" ? 1 : 0,
-                C.StakeCredential.from_keyhash(
-                  C.Ed25519KeyHash.from_hex(
-                    addressDetails.stakeCredential.hash,
+        const rewardAddr =
+          !rewardAddress && addressDetails.stakeCredential
+            ? (() => {
+                if (addressDetails.stakeCredential.type === "Key") {
+                  return C.RewardAddress.new(
+                    this.network === "Mainnet" ? 1 : 0,
+                    C.StakeCredential.from_keyhash(
+                      C.Ed25519KeyHash.from_hex(
+                        addressDetails.stakeCredential.hash,
+                      ),
+                    ),
+                  )
+                    .to_address()
+                    .to_bech32(undefined);
+                }
+                return C.RewardAddress.new(
+                  this.network === "Mainnet" ? 1 : 0,
+                  C.StakeCredential.from_scripthash(
+                    C.ScriptHash.from_hex(addressDetails.stakeCredential.hash),
                   ),
-                ),
-              )
-                .to_address()
-                .to_bech32(undefined);
-            }
-            return C.RewardAddress.new(
-              this.network === "Mainnet" ? 1 : 0,
-              C.StakeCredential.from_scripthash(
-                C.ScriptHash.from_hex(addressDetails.stakeCredential.hash),
-              ),
-            )
-              .to_address()
-              .to_bech32(undefined);
-          })()
-          : rewardAddress;
+                )
+                  .to_address()
+                  .to_bech32(undefined);
+              })()
+            : rewardAddress;
         return rewardAddr || null;
       },
       getUtxos: async (): Promise<UTxO[]> => {
@@ -391,8 +402,10 @@ export class Translucent {
       },
       getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
         const coreUtxos = C.TransactionUnspentOutputs.new();
-        (utxos ? utxos : await this.utxosAt(paymentCredentialOf(address)))
-          .forEach((utxo) => coreUtxos.add(utxoToCore(utxo)));
+        (utxos
+          ? utxos
+          : await this.utxosAt(paymentCredentialOf(address))
+        ).forEach((utxo) => coreUtxos.add(utxoToCore(utxo)));
         return coreUtxos;
       },
       getDelegation: async (): Promise<Delegation> => {
@@ -439,8 +452,10 @@ export class Translucent {
       },
     );
 
-    const paymentKeyHash = C.PrivateKey.from_bech32(paymentKey).to_public()
-      .hash().to_hex();
+    const paymentKeyHash = C.PrivateKey.from_bech32(paymentKey)
+      .to_public()
+      .hash()
+      .to_hex();
     const stakeKeyHash = stakeKey
       ? C.PrivateKey.from_bech32(stakeKey).to_public().hash().to_hex()
       : "";
@@ -462,7 +477,7 @@ export class Translucent {
       getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
         const coreUtxos = C.TransactionUnspentOutputs.new();
         (await this.utxosAt(paymentCredentialOf(address))).forEach((utxo) =>
-          coreUtxos.add(utxoToCore(utxo))
+          coreUtxos.add(utxoToCore(utxo)),
         );
         return coreUtxos;
       },
@@ -473,9 +488,7 @@ export class Translucent {
           ? await this.delegationAt(rewardAddr)
           : { poolId: null, rewards: 0n };
       },
-      signTx: async (
-        tx: C.Transaction,
-      ): Promise<C.TransactionWitnessSet> => {
+      signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
         const utxos = await this.utxosAt(address);
 
         const ownKeyHashes: Array<KeyHash> = [paymentKeyHash, stakeKeyHash];
@@ -505,8 +518,7 @@ export class Translucent {
           paymentCredential,
           stakeCredential,
           address: { hex: hexAddress },
-        } = this.utils
-          .getAddressDetails(address);
+        } = this.utils.getAddressDetails(address);
 
         const keyHash = paymentCredential?.hash || stakeCredential?.hash;
 

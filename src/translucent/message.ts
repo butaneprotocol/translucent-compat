@@ -31,13 +31,18 @@ export class Message {
 
   /** Sign message with a separate private key. */
   signWithPrivateKey(privateKey: PrivateKey): SignedMessage {
-    const { paymentCredential, stakeCredential, address: { hex: hexAddress } } =
-      this.translucent.utils.getAddressDetails(this.address);
+    const {
+      paymentCredential,
+      stakeCredential,
+      address: { hex: hexAddress },
+    } = this.translucent.utils.getAddressDetails(this.address);
 
     const keyHash = paymentCredential?.hash || stakeCredential?.hash;
 
-    const keyHashOriginal = C.PrivateKey.from_bech32(privateKey).to_public()
-      .hash().to_hex();
+    const keyHashOriginal = C.PrivateKey.from_bech32(privateKey)
+      .to_public()
+      .hash()
+      .to_hex();
 
     if (!keyHash || keyHash !== keyHashOriginal) {
       throw new Error(`Cannot sign message for address: ${this.address}.`);
