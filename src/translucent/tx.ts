@@ -918,7 +918,7 @@ async function createPoolRegistration(
     : null
 
   const metadataHash = metadata
-    ? C.PoolMetadataHash.from_bytes(C.hash_blake2b256(new Uint8Array(metadata)))
+    ? C.PoolMetadata.from_bytes(Buffer.from(new Uint8Array(metadata))).pool_metadata_hash()
     : null
 
   const relays = C.Relays.new()

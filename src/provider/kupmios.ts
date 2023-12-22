@@ -140,14 +140,11 @@ export class Kupmios implements Provider {
         'message',
         (msg: MessageEvent<string | Buffer>) => {
           try {
-            const {
-              result,
-              error
-            }: ogmios.QueryLedgerStateUtxoResponse = JSON.parse(
+            const response: ogmios.QueryLedgerStateUtxoResponse | ogmios.QueryLedgerStateEraMismatch | ogmios.QueryLedgerStateAcquiredExpired = JSON.parse(
               fromMaybeBuffer(msg.data),
             )
-            if (result){
-              res(result.map((utxo)=>{
+            if ('result' in response){
+              res(response.result.map((utxo)=>{
                 return {
                   txHash: utxo.transaction.id,
                   outputIndex: utxo.index,
@@ -159,7 +156,7 @@ export class Kupmios implements Provider {
               } as UTxO
               }))
             }else{
-              console.error("UTXO Fetch error", error)
+              console.error("UTXO Fetch error", response.error)
             }
           } catch {}
         },
@@ -214,14 +211,11 @@ export class Kupmios implements Provider {
         'message',
         (msg: MessageEvent<string | Buffer>) => {
           try {
-            const {
-              result,
-              error
-            }: ogmios.QueryLedgerStateUtxoResponse = JSON.parse(
+            const response: ogmios.QueryLedgerStateUtxoResponse | ogmios.QueryLedgerStateEraMismatch | ogmios.QueryLedgerStateAcquiredExpired = JSON.parse(
               fromMaybeBuffer(msg.data),
             )
-            if (result){
-              res(result.map((utxo)=>{
+            if ('result' in response){
+              res(response.result.map((utxo)=>{
                 return {
                   txHash: utxo.transaction.id,
                   outputIndex: utxo.index,
@@ -233,7 +227,7 @@ export class Kupmios implements Provider {
               } as UTxO
               }))
             }else{
-              console.error("UTXO Fetch error", error)
+              console.error("UTXO Fetch error", response.error)
             }
           } catch {}
         },

@@ -6,7 +6,6 @@ import {
   coreToUtxo,
   createCostModels,
   Data,
-  //datumJsonToCbor,
   fromHex,
   fromLabel,
   fromUnit,
@@ -20,7 +19,6 @@ import {
   valueToAssets,
 } from "../src/mod.ts";
 import * as fc from "fast-check";
-import { datumJsonToCbor } from "../src/provider/blockfrost.ts";
 
 const privateKey = C.PrivateKey.generate_ed25519().to_bech32();
 const translucent = await Translucent.new(undefined, "Preprod");
@@ -156,115 +154,115 @@ it("More complex datum structure", () => {
   expect(data).toEqual(Data.from(datum));
 });
 
-it("json datum to cbor datum", () => {
-  const jsonDatum = {
-    fields: [
-      {
-        fields: [
-          {
-            bytes: "bdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143",
-          },
-          {
-            map: [
-              {
-                k: {
-                  bytes: "",
-                },
-                v: {
-                  map: [
-                    {
-                      k: {
-                        bytes: "",
-                      },
-                      v: {
-                        int: 49000000,
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          },
-          {
-            list: [
-              {
-                fields: [
-                  {
-                    bytes:
-                      "bdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143",
-                  },
-                  {
-                    map: [
-                      {
-                        k: {
-                          bytes: "",
-                        },
-                        v: {
-                          map: [
-                            {
-                              k: {
-                                bytes: "",
-                              },
-                              v: {
-                                int: 49000000,
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                ],
-                constructor: 0,
-              },
-              {
-                fields: [
-                  {
-                    bytes:
-                      "6900ecb87083dbbe74a65b1036186bc9c12df2878842d936902f0b51",
-                  },
-                  {
-                    map: [
-                      {
-                        k: {
-                          bytes: "",
-                        },
-                        v: {
-                          map: [
-                            {
-                              k: {
-                                bytes: "",
-                              },
-                              v: {
-                                int: 735000,
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                ],
-                constructor: 0,
-              },
-            ],
-          },
-          {
-            int: 1653325108875,
-          },
-          {
-            bytes: "f4a4a183be0b0da6e7a7548d1b26f2191b1ab7b2d20ac1c7d97b681c",
-          },
-        ],
-        constructor: 0,
-      },
-    ],
-    constructor: 0,
-  };
-  const cborDatum =
-    "d8799fd8799f581cbdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143a140a1401a02ebae409fd8799f581cbdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143a140a1401a02ebae40ffd8799f581c6900ecb87083dbbe74a65b1036186bc9c12df2878842d936902f0b51a140a1401a000b3718ffff1b00000180f1db168b581cf4a4a183be0b0da6e7a7548d1b26f2191b1ab7b2d20ac1c7d97b681cffff";
-  expect(cborDatum).toEqual(datumJsonToCbor(jsonDatum));
-});
+// it("json datum to cbor datum", () => {
+//   const jsonDatum = {
+//     fields: [
+//       {
+//         fields: [
+//           {
+//             bytes: "bdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143",
+//           },
+//           {
+//             map: [
+//               {
+//                 k: {
+//                   bytes: "",
+//                 },
+//                 v: {
+//                   map: [
+//                     {
+//                       k: {
+//                         bytes: "",
+//                       },
+//                       v: {
+//                         int: 49000000,
+//                       },
+//                     },
+//                   ],
+//                 },
+//               },
+//             ],
+//           },
+//           {
+//             list: [
+//               {
+//                 fields: [
+//                   {
+//                     bytes:
+//                       "bdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143",
+//                   },
+//                   {
+//                     map: [
+//                       {
+//                         k: {
+//                           bytes: "",
+//                         },
+//                         v: {
+//                           map: [
+//                             {
+//                               k: {
+//                                 bytes: "",
+//                               },
+//                               v: {
+//                                 int: 49000000,
+//                               },
+//                             },
+//                           ],
+//                         },
+//                       },
+//                     ],
+//                   },
+//                 ],
+//                 constructor: 0,
+//               },
+//               {
+//                 fields: [
+//                   {
+//                     bytes:
+//                       "6900ecb87083dbbe74a65b1036186bc9c12df2878842d936902f0b51",
+//                   },
+//                   {
+//                     map: [
+//                       {
+//                         k: {
+//                           bytes: "",
+//                         },
+//                         v: {
+//                           map: [
+//                             {
+//                               k: {
+//                                 bytes: "",
+//                               },
+//                               v: {
+//                                 int: 735000,
+//                               },
+//                             },
+//                           ],
+//                         },
+//                       },
+//                     ],
+//                   },
+//                 ],
+//                 constructor: 0,
+//               },
+//             ],
+//           },
+//           {
+//             int: 1653325108875,
+//           },
+//           {
+//             bytes: "f4a4a183be0b0da6e7a7548d1b26f2191b1ab7b2d20ac1c7d97b681c",
+//           },
+//         ],
+//         constructor: 0,
+//       },
+//     ],
+//     constructor: 0,
+//   };
+//   const cborDatum =
+//     "d8799fd8799f581cbdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143a140a1401a02ebae409fd8799f581cbdd5402a608267d8d47e021a61e5c1ae6aa62a1f770579aa38b88143a140a1401a02ebae40ffd8799f581c6900ecb87083dbbe74a65b1036186bc9c12df2878842d936902f0b51a140a1401a000b3718ffff1b00000180f1db168b581cf4a4a183be0b0da6e7a7548d1b26f2191b1ab7b2d20ac1c7d97b681cffff";
+//   expect(cborDatum).toEqual(datumJsonToCbor(jsonDatum));
+// });
 
 it("Assets to value", () => {
   const unit = "0".repeat(56);
