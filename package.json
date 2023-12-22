@@ -7,9 +7,9 @@
     "build:wasm": "cd ./uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && npm i"
   },
   "devDependencies": {
-    "bun-types": "latest",
     "@types/jest": "^29.5.5",
     "@types/sha256": "^0.2.2",
+    "bun-types": "latest",
     "eslint": "^8.50.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1"
@@ -25,8 +25,8 @@
     "fast-check": "^3.14.0",
     "prettier": "^3.1.1",
     "sha256": "^0.2.0",
-    "uplc-node": "file:./uplc/pkg-node",
-    "uplc-web": "file:./uplc/pkg-web"
+    "uplc-node": "^0.0.1",
+    "uplc-web": "^0.0.1"
   },
   "browser": {
     "./core/core.ts": "./core/core-browser.ts"
