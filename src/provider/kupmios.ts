@@ -185,8 +185,8 @@ export class Kupmios implements Provider {
       {
         headers: this.headers,
       },
-    ).then((res) => res.json())
-    // return this.kupmiosUtxosToUtxos(result)
+    ).then((res) => res.json()) as unknown as {transaction_id: string, output_index: number}[]
+    return (await this.getUtxosByOutRef(result.map((x)=>{return {txHash: x.transaction_id, outputIndex: x.output_index}})))
   }
 
   async getUtxoByUnit(unit: Unit): Promise<UTxO> {
@@ -198,15 +198,12 @@ export class Kupmios implements Provider {
       {
         headers: this.headers,
       },
-    ).then((res) => res.json())
+    ).then((res) => res.json()) as unknown as {transaction_id: string, output_index: number}[]
     
-    // const utxos = await this.kupmiosUtxosToUtxos(result)
-
-    // if (utxos.length > 1) {
-    //   throw new Error('Unit needs to be an NFT or only held by one address.')
-    // }
-
-    // return utxos[0]
+    if (result.length > 1){
+      throw new Error('Unit needs to be an NFT or only held by one address.')
+    }
+    return (await this.getUtxosByOutRef(result.map((x)=>{return {txHash: x.transaction_id, outputIndex: x.output_index}})))[0]
   }
 
   async getUtxosByOutRef(outRefs: Array<OutRef>): Promise<UTxO[]> {
