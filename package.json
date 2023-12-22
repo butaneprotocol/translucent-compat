@@ -1,10 +1,10 @@
 {
-  "name": "@txpipe/translucent",
+  "name": "translucent-cardano",
   "module": "index.ts",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "build:wasm": "cd ./uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && bun i"
+    "build:wasm": "cd ./uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && npm i"
   },
   "devDependencies": {
     "bun-types": "latest",
