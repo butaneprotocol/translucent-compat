@@ -17,6 +17,14 @@ import {
 import { C } from "../core/mod.ts";
 import { fromHex, fromUnit, toHex } from "../utils/mod.ts";
 
+function fromMaybeBuffer(x: string | Buffer){
+  if (typeof x === 'string') {
+    return x;
+  } else {
+    return x.toString();
+  }
+}
+
 export class Kupmios implements Provider {
   kupoUrl: string;
   ogmiosUrl: string;
@@ -36,9 +44,9 @@ export class Kupmios implements Provider {
     });
 
     return new Promise((res, rej) => {
-      client.addEventListener("message", (msg: MessageEvent<string>) => {
+      client.addEventListener("message", (msg: MessageEvent<string | Buffer>): unknown => {
         try {
-          const { result } = JSON.parse(msg.data);
+          const { result } = JSON.parse(fromMaybeBuffer(msg.data));
 
           // deno-lint-ignore no-explicit-any
           const costModels: any = {};
@@ -74,6 +82,7 @@ export class Kupmios implements Provider {
         } catch (e) {
           rej(e);
         }
+        return undefined as unknown
       }, { once: true });
     });
   }
@@ -153,9 +162,9 @@ export class Kupmios implements Provider {
     });
 
     return new Promise((res, rej) => {
-      client.addEventListener("message", (msg: MessageEvent<string>) => {
+      client.addEventListener("message", (msg: MessageEvent<string | Buffer>) => {
         try {
-          const { result } = JSON.parse(msg.data);
+          const { result } = JSON.parse(fromMaybeBuffer(msg.data));
           const delegation = (result ? Object.values(result)[0] : {}) as {
             delegate: string;
             rewards: number;
@@ -190,7 +199,7 @@ export class Kupmios implements Provider {
         const isConfirmed = await fetch(
           `${this.kupoUrl}/matches/*@${txHash}?unspent`,
         ).then((res) => res.json());
-        if (isConfirmed && isConfirmed.length > 0) {
+        if (isConfirmed && Object.keys(isConfirmed).length > 0) {
           clearInterval(confirmation);
           await new Promise((res) => setTimeout(() => res(1), 1000));
           return res(true);
@@ -205,9 +214,9 @@ export class Kupmios implements Provider {
     });
 
     return new Promise((res, rej) => {
-      client.addEventListener("message", (msg: MessageEvent<string>) => {
+      client.addEventListener("message", (msg: MessageEvent<string|Buffer>) => {
         try {
-          const { result } = JSON.parse(msg.data);
+          const { result } = JSON.parse(fromMaybeBuffer(msg.data));
 
           if (result.SubmitSuccess) res(result.SubmitSuccess.txId);
           else rej(result.SubmitFail);
@@ -244,19 +253,19 @@ export class Kupmios implements Provider {
               language,
             } = await fetch(
               `${this.kupoUrl}/scripts/${utxo.script_hash}`,
-            ).then((res) => res.json());
+            ).then((res) => res.json() as any);
 
             if (language === "native") {
               return { type: "Native", script };
             } else if (language === "plutus:v1") {
               return {
                 type: "PlutusV1",
-                script: toHex(C.PlutusScript.new(fromHex(script)).to_bytes()),
+                script: toHex(C.PlutusV1Script.from_bytes(fromHex(script)).bytes()),
               };
             } else if (language === "plutus:v2") {
               return {
                 type: "PlutusV2",
-                script: toHex(C.PlutusScript.new(fromHex(script)).to_bytes()),
+                script: toHex(C.PlutusV2Script.from_bytes(fromHex(script)).bytes()),
               };
             }
           })()),
