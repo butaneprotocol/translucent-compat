@@ -861,16 +861,27 @@ export class Tx {
     }
     this.txBuilder.select_utxos(2);
 
-    let collateralUTxO: C.InputBuilderResult
     {
       let foundUtxo = walletUTxOs.find((x)=>BigInt(x.output().amount().coin().to_str())>=(BigInt(Math.pow(10, 7))))
       if (foundUtxo==undefined){
         throw "Could not find a suitable collateral UTxO."
       }else{
-        collateralUTxO = C.SingleInputBuilder.new(foundUtxo.input(), foundUtxo.output()).payment_key()
+        let collateralUTxO = C.SingleInputBuilder.new(foundUtxo.input(), foundUtxo.output()).payment_key()
+        // todo: make user lose less ada
+        
+        let minCollateralOutput = C.TransactionOutputBuilder.new()
+        minCollateralOutput = minCollateralOutput.with_address(foundUtxo.output().address())
+        let amtBuilder = minCollateralOutput.next()
+        let params = this.translucent.provider
+        ? await this.translucent.provider.getProtocolParameters()
+        : PROTOCOL_PARAMETERS_DEFAULT;
+        let multiAsset = foundUtxo.output().amount().multiasset()
+        amtBuilder = amtBuilder.with_asset_and_min_required_coin(multiAsset || C.MultiAsset.new(), C.BigNum.from_str(params.coinsPerUtxoByte.toString()))
+        const collateralReturn = amtBuilder.build().output()
+        this.txBuilder.add_collateral(collateralUTxO)
+        this.txBuilder.set_collateral_return(collateralReturn)
       }
     }
-    this.txBuilder.add_collateral(collateralUTxO)
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
       0,
       changeAddress,
