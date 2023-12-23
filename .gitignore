@@ -6,3 +6,6 @@ deno.lock
 test.ts
 uplc/target
 .VSCodeCounter
+.env
+.env.*
+seed.txt

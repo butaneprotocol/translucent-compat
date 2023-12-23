@@ -721,12 +721,12 @@ function doNativeScriptFromJSON(nativeScript: NativeScript): C.NativeScript {
     }
     return C.NativeScript.new_script_all(C.ScriptAny.new(nativeScripts));
   } else if (nativeScript.type === "before") {
-    return C.NativeScript.new_timelock_start(
-      C.TimelockStart.new(C.BigNum.from_str(nativeScript.slot.toString())),
-    );
-  } else if (nativeScript.type === "after") {
     return C.NativeScript.new_timelock_expiry(
       C.TimelockExpiry.new(C.BigNum.from_str(nativeScript.slot.toString())),
+    );
+  } else if (nativeScript.type === "after") {
+    return C.NativeScript.new_timelock_start(
+      C.TimelockStart.new(C.BigNum.from_str(nativeScript.slot.toString())),
     );
   } else if (nativeScript.type === "atLeast") {
     const nativeScripts = C.NativeScripts.new();
