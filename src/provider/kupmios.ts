@@ -16,13 +16,7 @@ import {
   UTxO,
 } from "../types/mod.ts";
 import { C } from "../core/mod.ts";
-import {
-  costModelKeys,
-  fromHex,
-  fromUnit,
-  toHex,
-  Utils,
-} from "../utils/mod.ts";
+import { costModelKeys, fromUnit } from "../utils/mod.ts";
 import * as ogmios from "@cardano-ogmios/schema";
 
 function fromMaybeBuffer(x: string | Buffer) {
@@ -50,13 +44,15 @@ function fromOgmiosValue(value: ogmios.Value): Assets {
 export class Kupmios implements Provider {
   kupoUrl: string;
   ogmiosUrl: string;
-  headers?: HeadersInit;
+  headers?: any; //TODO: fix this type not sure what the header should be
 
   /**
+   * This provider is based on Kupo + Ogmios v6.
+   * This is a way to support both ogmios 5.6 and 6.0 until 6.0 is released as stable and the Conway hard-fork is done.
    * @param kupoUrl: http(s)://localhost:1442
    * @param ogmiosUrl: ws(s)://localhost:1337
    */
-  constructor(kupoUrl: string, ogmiosUrl: string, headers?: HeadersInit) {
+  constructor(kupoUrl: string, ogmiosUrl: string, headers?: any) {
     this.kupoUrl = kupoUrl;
     this.ogmiosUrl = ogmiosUrl;
     this.headers = headers;
@@ -72,6 +68,7 @@ export class Kupmios implements Provider {
       client.addEventListener(
         "message",
         (msg: MessageEvent<string | Buffer>): unknown => {
+          console.log("queryLedgerState/protocolParameters", msg.data);
           try {
             const {
               result,
@@ -348,7 +345,7 @@ export class Kupmios implements Provider {
         (msg: MessageEvent<string | Buffer>) => {
           try {
             const response = JSON.parse(fromMaybeBuffer(msg.data));
-            if ('result' in response) res(response.result.transaction.id);
+            if ("result" in response) res(response.result.transaction.id);
             else rej(response.error);
             client.close();
           } catch (e) {

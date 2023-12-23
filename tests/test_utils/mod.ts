@@ -1,5 +1,5 @@
-import { Kupmios, Translucent } from "../../src/mod.ts";
-import { Maestro } from "../../src/provider/maestro.ts";
+import { Translucent, KupmiosV5, Kupmios } from "../../src/mod.ts";
+import {} from "../../src/provider/kupmiosv5.ts";
 import CONFIG from "./config.ts";
 
 export async function setupTestInstance({
@@ -7,15 +7,17 @@ export async function setupTestInstance({
 }: {
   accountIndex: number;
 }) {
-  if (!CONFIG.KUPO_URL || !CONFIG.OGMIOS_URL) {
+  if (!CONFIG.KUPO_PREVIEW_URL || !CONFIG.OGMIOS_PREVIEW_URL) {
     throw new Error("Missing KUPO_URL or OGMIOS_URL environment variable");
   }
-  // const provider = new Kupmios(CONFIG.KUPO_URL, CONFIG.OGMIOS_URL);
+  const provider = CONFIG.USE_OGMIOS_V5
+    ? new KupmiosV5(CONFIG.KUPO_PREVIEW_URL, CONFIG.OGMIOS_PREVIEW_URL)
+    : new Kupmios(CONFIG.KUPO_PREVIEW_URL, CONFIG.OGMIOS_PREVIEW_URL);
   // Using maestro until we rollback Kupmios
-  const provider = new Maestro({
-    network: "Preview",
-    apiKey: "<API_KEY>",
-  });
+  // const provider = new Maestro({
+  //   network: "Preview",
+  //   apiKey: "<API_KEY>",
+  // });
   const translucent = await Translucent.new(provider, "Preview");
   if (!CONFIG.SEED_PHRASE) {
     throw new Error("Missing SEED_PHRASE environment variable");

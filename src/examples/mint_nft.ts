@@ -18,7 +18,7 @@ import { getInstanceWithWallet } from "./common.ts";
 const translucent = await getInstanceWithWallet(
   new Maestro({
     network: "Preview",
-    apiKey: "<API_KEY>",
+    apiKey: process.env.MAESTRO_API_KEY ?? "<API_KEY>",
   }),
   "Preview",
 );
