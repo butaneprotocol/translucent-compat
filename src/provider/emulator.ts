@@ -33,9 +33,9 @@ type FlatOutRef = string;
 
 function verifyNativeScript(
   ns: C.NativeScript,
-  start?: C.BigNum,
-  end?: C.BigNum,
-  edKeyHashes?: C.Ed25519KeyHashes,
+  start?: BigInt,
+  end?: BigInt,
+  edKeyHashes?: C.RequiredSigners,
 ) {
   return true;
 }
@@ -89,7 +89,7 @@ export class Emulator implements Provider {
           assets,
           datumHash: outputData?.asHash
             ? C.hash_plutus_data(
-                C.PlutusData.from_bytes(fromHex(outputData.asHash)),
+                C.PlutusData.from_cbor_hex(outputData.asHash),
               ).to_hex()
             : outputData?.hash,
           datum: outputData?.inline,
@@ -257,21 +257,21 @@ export class Emulator implements Provider {
           - Validity interval
      */
 
-    const desTx = C.Transaction.from_bytes(fromHex(tx));
+    const desTx = C.Transaction.from_cbor_hex(tx);
 
     const body = desTx.body();
     const witnesses = desTx.witness_set();
-    const datums = witnesses.plutus_data();
+    const datums = witnesses.plutus_datums();
 
-    const txHash = C.hash_transaction(body).to_hex();
+    const txHash: string = C.hash_transaction(body).to_hex();
 
     // Validity interval
     // Lower bound is inclusive?
     // Upper bound is inclusive?
-    const lowerBound = body.validity_start_interval()
-      ? parseInt(body.validity_start_interval()!.to_str())
+    const lowerBound = body.validity_interval_start()
+      ? parseInt(body.validity_interval_start()!.toString())
       : null;
-    const upperBound = body.ttl() ? parseInt(body.ttl()!.to_str()) : null;
+    const upperBound = body.ttl() ? parseInt(body.ttl()!.toString()) : null;
 
     if (Number.isInteger(lowerBound) && this.slot < lowerBound!) {
       throw new Error(
@@ -290,8 +290,8 @@ export class Emulator implements Provider {
       const table: Record<DatumHash, Datum> = {};
       for (let i = 0; i < (datums?.len() || 0); i++) {
         const datum = datums!.get(i);
-        const datumHash = C.hash_plutus_data(datum).to_hex();
-        table[datumHash] = toHex(datum.to_bytes());
+        const datumHash: string = C.hash_plutus_data(datum).to_hex();
+        table[datumHash] = datum.to_cbor_hex();
       }
       return table;
     })();
@@ -301,12 +301,12 @@ export class Emulator implements Provider {
     // Witness keys
     const keyHashes = (() => {
       const keyHashes = [];
-      for (let i = 0; i < (witnesses.vkeys()?.len() || 0); i++) {
-        const witness = witnesses.vkeys()!.get(i);
-        const publicKey = witness.vkey().public_key();
+      for (let i = 0; i < (witnesses.vkeywitnesses()?.len() || 0); i++) {
+        const witness = witnesses.vkeywitnesses()!.get(i);
+        const publicKey = witness.vkey()
         const keyHash = publicKey.hash().to_hex();
 
-        if (!publicKey.verify(fromHex(txHash), witness.signature())) {
+        if (!publicKey.verify(fromHex(txHash), witness.ed25519_signature())) {
           throw new Error(`Invalid vkey witness. Key hash: ${keyHash}`);
         }
         keyHashes.push(keyHash);
@@ -315,7 +315,7 @@ export class Emulator implements Provider {
     })();
 
     // We only need this to verify native scripts. The check happens in the CML.
-    const edKeyHashes = C.Ed25519KeyHashes.new();
+    const edKeyHashes = C.RequiredSigners.new();
     keyHashes.forEach((keyHash) =>
       edKeyHashes.add(C.Ed25519KeyHash.from_hex(keyHash)),
     );
@@ -331,10 +331,10 @@ export class Emulator implements Provider {
           !verifyNativeScript(
             witness,
             Number.isInteger(lowerBound)
-              ? C.BigNum.from_str(lowerBound!.toString())
+              ? BigInt(lowerBound!)
               : undefined,
             Number.isInteger(upperBound)
-              ? C.BigNum.from_str(upperBound!.toString())
+              ? BigInt(upperBound!)
               : undefined,
             edKeyHashes,
           )
@@ -386,7 +386,7 @@ export class Emulator implements Provider {
     for (let i = 0; i < inputs.len(); i++) {
       const input = inputs.get(i);
 
-      const outRef = input.transaction_id().to_hex() + input.index().to_str();
+      const outRef = input.transaction_id().to_hex() + input.index().toString();
 
       const entryLedger = this.ledger[outRef];
 
@@ -407,20 +407,20 @@ export class Emulator implements Provider {
       if (scriptRef) {
         switch (scriptRef.type) {
           case "Native": {
-            const script = C.NativeScript.from_bytes(fromHex(scriptRef.script));
+            const script = C.NativeScript.from_cbor_hex(scriptRef.script);
             nativeHashesOptional[script.hash().to_hex()] = script;
             break;
           }
           case "PlutusV1": {
-            const script = C.PlutusV1Script.from_bytes(
-              fromHex(scriptRef.script),
+            const script = C.PlutusV1Script.from_cbor_hex(
+              scriptRef.script,
             );
             plutusHashesOptional.push(script.hash().to_hex());
             break;
           }
           case "PlutusV2": {
-            const script = C.PlutusV2Script.from_bytes(
-              fromHex(scriptRef.script),
+            const script = C.PlutusV2Script.from_cbor_hex(
+              scriptRef.script,
             );
             plutusHashesOptional.push(script.hash().to_hex());
             break;
@@ -437,7 +437,7 @@ export class Emulator implements Provider {
     for (let i = 0; i < (body.reference_inputs()?.len() || 0); i++) {
       const input = body.reference_inputs()!.get(i);
 
-      const outRef = input.transaction_id().to_hex() + input.index().to_str();
+      const outRef = input.transaction_id().to_hex() + input.index().toString();
 
       const entry = this.ledger[outRef] || this.mempool[outRef];
 
@@ -454,20 +454,20 @@ export class Emulator implements Provider {
       if (scriptRef) {
         switch (scriptRef.type) {
           case "Native": {
-            const script = C.NativeScript.from_bytes(fromHex(scriptRef.script));
+            const script = C.NativeScript.from_cbor_hex(scriptRef.script);
             nativeHashesOptional[script.hash().to_hex()] = script;
             break;
           }
           case "PlutusV1": {
-            const script = C.PlutusV1Script.from_bytes(
-              fromHex(scriptRef.script),
+            const script = C.PlutusV1Script.from_cbor_hex(
+              scriptRef.script,
             );
             plutusHashesOptional.push(script.hash().to_hex());
             break;
           }
           case "PlutusV2": {
-            const script = C.PlutusV2Script.from_bytes(
-              fromHex(scriptRef.script),
+            const script = C.PlutusV2Script.from_cbor_hex(
+              scriptRef.script,
             );
             plutusHashesOptional.push(script.hash().to_hex());
             break;
@@ -491,8 +491,8 @@ export class Emulator implements Provider {
       for (let i = 0; i < (witnesses.redeemers()?.len() || 0); i++) {
         const redeemer = witnesses.redeemers()!.get(i);
         collected.push({
-          tag: tagMap[redeemer.tag().kind()],
-          index: parseInt(redeemer.index().to_str()),
+          tag: tagMap[redeemer.tag()],
+          index: parseInt(redeemer.index().toString()),
         });
       }
       return collected;
@@ -522,10 +522,10 @@ export class Emulator implements Provider {
               !verifyNativeScript(
                 nativeHashesOptional[credential.hash],
                 Number.isInteger(lowerBound)
-                  ? C.BigNum.from_str(lowerBound!.toString())
+                  ? BigInt(lowerBound!)
                   : undefined,
                 Number.isInteger(upperBound)
-                  ? C.BigNum.from_str(upperBound!.toString())
+                  ? BigInt(upperBound!)
                   : undefined,
                 edKeyHashes,
               )
@@ -557,10 +557,10 @@ export class Emulator implements Provider {
 
     // Check collateral inputs
 
-    for (let i = 0; i < (body.collateral()?.len() || 0); i++) {
-      const input = body.collateral()!.get(i);
+    for (let i = 0; i < (body.collateral_inputs()?.len() || 0); i++) {
+      const input = body.collateral_inputs()!.get(i);
 
-      const outRef = input.transaction_id().to_hex() + input.index().to_str();
+      const outRef = input.transaction_id().to_hex() + input.index().toString();
 
       const entry = this.ledger[outRef] || this.mempool[outRef];
 
@@ -608,7 +608,7 @@ export class Emulator implements Provider {
     ) {
       const rawAddress = body.withdrawals()!.keys().get(index);
       const withdrawal: Lovelace = BigInt(
-        body.withdrawals()!.get(rawAddress)!.to_str(),
+        body.withdrawals()!.get(rawAddress)!.toString(),
       );
       const rewardAddress = rawAddress.to_address().to_bech32(undefined);
       const { stakeCredential } = getAddressDetails(rewardAddress);
@@ -643,7 +643,7 @@ export class Emulator implements Provider {
         case 0: {
           const registration = cert.as_stake_registration()!;
           const rewardAddress = C.RewardAddress.new(
-            C.NetworkInfo.testnet().network_id(),
+            Number(C.NetworkId.testnet().network()),
             registration.stake_credential(),
           )
             .to_address()
@@ -659,7 +659,7 @@ export class Emulator implements Provider {
         case 1: {
           const deregistration = cert.as_stake_deregistration()!;
           const rewardAddress = C.RewardAddress.new(
-            C.NetworkInfo.testnet().network_id(),
+            Number(C.NetworkId.testnet().network()),
             deregistration.stake_credential(),
           )
             .to_address()
@@ -679,12 +679,12 @@ export class Emulator implements Provider {
         case 2: {
           const delegation = cert.as_stake_delegation()!;
           const rewardAddress = C.RewardAddress.new(
-            C.NetworkInfo.testnet().network_id(),
+            Number(C.NetworkId.testnet().network()),
             delegation.stake_credential(),
           )
             .to_address()
             .to_bech32(undefined);
-          const poolId = delegation.pool_keyhash().to_bech32("pool");
+          const poolId = delegation.ed25519_key_hash().to_bech32("pool");
 
           const { stakeCredential } = getAddressDetails(rewardAddress);
           checkAndConsumeHash(stakeCredential!, "Cert", index);
@@ -722,7 +722,7 @@ export class Emulator implements Provider {
         const unspentOutput = C.TransactionUnspentOutput.new(
           C.TransactionInput.new(
             C.TransactionHash.from_hex(txHash),
-            C.BigNum.from_str(i.toString()),
+            BigInt(i),
           ),
           output,
         );

@@ -131,14 +131,10 @@ export class Kupmios implements Provider {
     let addy =
       typeof addressOrCredential == "string"
         ? addressOrCredential
-        : C.EnterpriseAddress.new(
-            0,
-            C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(addressOrCredential.hash),
-            ),
-          )
-            .to_address()
-            .to_bech32(undefined);
+        : C.Address.from_raw_bytes(
+            fromHex(addressOrCredential.hash)
+          ).to_bech32()
+          
     let params: ogmios.UtxoByAddresses | ogmios.UtxoByOutputReferences = {
       addresses: [addy],
     };

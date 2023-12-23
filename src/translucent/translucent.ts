@@ -70,19 +70,19 @@ export class Translucent {
       const slotConfig = SLOT_CONFIG_NETWORK[translucent.network];
       translucent.txBuilderConfig = C.TransactionBuilderConfigBuilder.new()
         .coins_per_utxo_byte(
-          C.BigNum.from_str(protocolParameters.coinsPerUtxoByte.toString()),
+          protocolParameters.coinsPerUtxoByte,
         )
         .fee_algo(
           C.LinearFee.new(
-            C.BigNum.from_str(protocolParameters.minFeeA.toString()),
-            C.BigNum.from_str(protocolParameters.minFeeB.toString()),
+            BigInt(protocolParameters.minFeeA),
+            BigInt(protocolParameters.minFeeB),
           ),
         )
         .key_deposit(
-          C.BigNum.from_str(protocolParameters.keyDeposit.toString()),
+          protocolParameters.keyDeposit,
         )
         .pool_deposit(
-          C.BigNum.from_str(protocolParameters.poolDeposit.toString()),
+          protocolParameters.poolDeposit,
         )
         .max_tx_size(protocolParameters.maxTxSize)
         .max_value_size(protocolParameters.maxValSize)
@@ -90,17 +90,17 @@ export class Translucent {
         .max_collateral_inputs(protocolParameters.maxCollateralInputs)
         .ex_unit_prices(
           C.ExUnitPrices.new(
-            C.UnitInterval.new(
-              C.BigNum.from_str(protocolParameters.priceMem[0].toString()),
-              C.BigNum.from_str(protocolParameters.priceMem[1].toString()),
+            C.Rational.new(
+              protocolParameters.priceMem[0],
+              protocolParameters.priceMem[1],
             ),
-            C.UnitInterval.new(
-              C.BigNum.from_str(protocolParameters.priceStep[0].toString()),
-              C.BigNum.from_str(protocolParameters.priceStep[1].toString()),
+            C.Rational.new(
+              protocolParameters.priceStep[0],
+              protocolParameters.priceStep[1],
             ),
           ),
         )
-        .costmdls(createCostModels(protocolParameters.costModels))
+        .cost_models(createCostModels(protocolParameters.costModels))
         .build();
     }
     translucent.utils = new Utils(translucent);
@@ -131,7 +131,7 @@ export class Translucent {
   }
 
   fromTx(tx: Transaction): TxComplete {
-    return new TxComplete(this, C.Transaction.from_bytes(fromHex(tx)));
+    return new TxComplete(this, C.Transaction.from_cbor_hex(tx));
   }
 
   /** Signs a message. Expects the payload to be Hex encoded. */
@@ -225,9 +225,9 @@ export class Translucent {
     this.wallet = {
       // deno-lint-ignore require-await
       address: async (): Promise<Address> =>
-        C.EnterpriseAddress.new(
+        C.Address.new(
           this.network === "Mainnet" ? 1 : 0,
-          C.StakeCredential.from_keyhash(pubKeyHash),
+          C.Credential.new_pub_key(pubKeyHash),
         )
           .to_address()
           .to_bech32(undefined),
@@ -299,14 +299,14 @@ export class Translucent {
 
     this.wallet = {
       address: async (): Promise<Address> =>
-        C.Address.from_bytes(fromHex(await getAddressHex())).to_bech32(
+        C.Address.from_hex(await getAddressHex()).to_bech32(
           undefined,
         ),
       rewardAddress: async (): Promise<RewardAddress | null> => {
         const [rewardAddressHex] = await api.getRewardAddresses();
         const rewardAddress = rewardAddressHex
           ? C.RewardAddress.from_address(
-              C.Address.from_bytes(fromHex(rewardAddressHex)),
+              C.Address.from_hex(rewardAddressHex),
             )!
               .to_address()
               .to_bech32(undefined)

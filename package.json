@@ -17,8 +17,8 @@
   "dependencies": {
     "@cardano-ogmios/client": "^6.0.0-rc6",
     "@cardano-ogmios/schema": "^6.0.0-rc6",
-    "@dcspark/cardano-multiplatform-lib-browser": "^3.1.2",
-    "@dcspark/cardano-multiplatform-lib-nodejs": "^3.1.2",
+    "@dcspark/cardano-multiplatform-lib-browser": "^4.0.1",
+    "@dcspark/cardano-multiplatform-lib-nodejs": "^4.0.1",
     "@emurgo/cardano-message-signing-browser": "^1.0.1",
     "@emurgo/cardano-message-signing-nodejs": "^1.0.1",
     "@sinclair/typebox": "^0.31.28",

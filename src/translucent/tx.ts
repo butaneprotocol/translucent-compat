@@ -38,8 +38,8 @@ import { TxComplete } from "./tx_complete.ts";
 import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
 
 type ScriptOrRef =
-  | { inlineScript: C.PlutusScript }
-  | { referenceScript: C.PlutusV2Script };
+  | { inlineScript: C.Script }
+  | { referenceScript: C.Script };
 
 export class Tx {
   txBuilder: C.TransactionBuilder;
@@ -76,14 +76,14 @@ export class Tx {
         }
         const coreUtxo = utxoToCore(utxo);
         {
-          let scriptRef = coreUtxo.output().script_ref();
-          if (scriptRef) {
-            let script = scriptRef.script();
-            if (!script.as_plutus_v2()) {
-              throw "Reference script wasn't V2 compatible";
+          if (utxo.scriptRef) {
+            let scriptRef = utxo.scriptRef
+            let script = C.Script.from_cbor_hex(scriptRef.script);
+            if ((scriptRef.type=="PlutusV1")) {
+              throw "Reference script wasn't compatible (V1!)";
             }
             this.scripts[script.hash().to_hex()] = {
-              referenceScript: script.as_plutus_v2()!,
+              referenceScript: script,
             };
           }
         }
@@ -106,43 +106,39 @@ export class Tx {
         }
         const coreUtxo = utxoToCore(utxo);
         this.UTxOs.push(coreUtxo);
-        let inputBuilder = C.SingleInputBuilder.new(
-          coreUtxo.input(),
-          coreUtxo.output(),
-        );
+        let inputBuilder = C.SingleInputBuilder.from_transaction_unspent_output(coreUtxo)
         let mr: C.InputBuilderResult;
-        let address = coreUtxo.output().address();
+        let address = C.Address.from_bech32(utxo.address)
         let paymentCredential = address.payment_cred();
-        if (redeemer && paymentCredential?.to_scripthash()) {
-          let paymentCredential = address.payment_cred();
-          if (!paymentCredential) {
-            throw "Address has no payment credential";
-          }
-          if (!paymentCredential.to_scripthash()) {
+        if (redeemer) {
+          if (!paymentCredential?.as_script()) {
             throw "Address isn't a scripthash but has a redeemer";
           }
-          let scriptHash = paymentCredential.to_scripthash()!.to_hex();
+          let scriptHash = C.ScriptHash.from_raw_bytes(paymentCredential.as_script()!.to_raw_bytes()).to_hex();
           let script = this.scripts[scriptHash];
           if (!script) {
             throw "Script was not attached for UTxO spend";
           }
-          let datum = coreUtxo.output().datum()?.as_inline_data();
+          if (!utxo.datum) {
+            throw "Cannot collect without inline datum!"
+          }
+          let datum = C.PlutusData.from_cbor_hex(utxo.datum!)
           if ("inlineScript" in script) {
             mr = inputBuilder.plutus_script(
               C.PartialPlutusWitness.new(
                 C.PlutusScriptWitness.from_script(script.inlineScript),
-                C.PlutusData.from_bytes(fromHex(redeemer)),
+                C.PlutusData.from_cbor_hex(redeemer),
               ),
-              C.Ed25519KeyHashes.new(),
+              C.RequiredSigners.new(),
               datum!,
             );
           } else {
             mr = inputBuilder.plutus_script(
               C.PartialPlutusWitness.new(
                 C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
-                C.PlutusData.from_bytes(fromHex(redeemer)),
+                C.PlutusData.from_cbor_hex(redeemer),
               ),
-              C.Ed25519KeyHashes.new(),
+              C.RequiredSigners.new(),
               datum!,
             );
           }
@@ -177,7 +173,7 @@ export class Tx {
     this.tasks.push((that) => {
       const units = Object.keys(assets);
       const policyId = units[0].slice(0, 56);
-      const mintAssets = C.MintAssets.new();
+      const mintAssets = C.MapAssetNameToNonZeroInt64.new()
       units.forEach((unit) => {
         if (unit.slice(0, 56) !== policyId) {
           throw new Error(
@@ -185,8 +181,8 @@ export class Tx {
           );
         }
         mintAssets.insert(
-          C.AssetName.new(fromHex(unit.slice(56))),
-          C.Int.from_str(assets[unit].toString()),
+          C.AssetName.from_bytes(fromHex(unit.slice(56))),
+          BigInt(assets[unit].toString()),
         );
       });
       let mintBuilder = C.SingleMintBuilder.new(mintAssets);
@@ -199,10 +195,11 @@ export class Tx {
         if ("inlineScript" in script) {
           mr = mintBuilder.plutus_script(
             C.PartialPlutusWitness.new(
+              //C.Script.new_plutus_v2(C.PlutusV2Script.from_cbor_hex(script.inlineScript))
               C.PlutusScriptWitness.from_script(script.inlineScript),
               C.PlutusData.from_bytes(fromHex(redeemer)),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         } else {
           mr = mintBuilder.plutus_script(
@@ -210,7 +207,7 @@ export class Tx {
               C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
               C.PlutusData.from_bytes(fromHex(redeemer)),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         }
       } else {
@@ -247,19 +244,18 @@ export class Tx {
         ? await this.translucent.provider.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
       {
-        let masset = assetsC.multiasset() || C.MultiAsset.new();
+        let masset = assetsC.multi_asset() || C.MultiAsset.new();
         valueBuilder = valueBuilder.with_asset_and_min_required_coin(
           masset,
-          C.BigNum.from_str(params.coinsPerUtxoByte.toString()),
+          params.coinsPerUtxoByte,
         );
         let output = valueBuilder.build();
-        let coin = Math.max(
-          parseInt(output.output().amount().coin().to_str()),
+        let coin = BigInt(Math.max(
+          Number(output.output().amount().coin()),
           Number(assets.lovelace || 0),
-        );
-        valueBuilder = valueBuilder.with_coin_and_asset(
-          C.BigNum.from_str(coin.toString()),
-          masset,
+        ));
+        valueBuilder = valueBuilder.with_value(
+          C.Value.new(coin, masset)
         );
       }
       that.txBuilder.add_output(valueBuilder.build());
@@ -297,8 +293,7 @@ export class Tx {
       } else if (outputData.asHash) {
         throw "no support for as hash";
       } else if (outputData.inline) {
-        const plutusData = C.PlutusData.from_bytes(fromHex(outputData.inline));
-        outputBuilder = outputBuilder.with_data(C.Datum.new_data(plutusData));
+        outputBuilder = outputBuilder.with_data(C.DatumOption.from_cbor_hex(outputData.inline));
       }
 
       const script = outputData.scriptRef;
@@ -313,19 +308,20 @@ export class Tx {
         ? await this.translucent.provider.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
       {
-        let masset = assetsC.multiasset() || C.MultiAsset.new();
+        let masset = assetsC.multi_asset() || C.MultiAsset.new();
         valueBuilder = valueBuilder.with_asset_and_min_required_coin(
           masset,
-          C.BigNum.from_str(params.coinsPerUtxoByte.toString()),
+          params.coinsPerUtxoByte,
         );
         let output = valueBuilder.build();
-        let coin = Math.max(
-          parseInt(output.output().amount().coin().to_str()),
+        let coin = BigInt(Math.max(
+          Number(output.output().amount().coin()),
           Number(assets.lovelace || 0),
-        );
-        valueBuilder = valueBuilder.with_coin_and_asset(
-          C.BigNum.from_str(coin.toString()),
-          masset,
+        ));
+        valueBuilder = valueBuilder.with_value(
+          C.Value.new(
+          coin,
+          masset)
         );
       }
       let output = valueBuilder.build();
@@ -367,28 +363,29 @@ export class Tx {
       }
       const credential =
         addressDetails.stakeCredential.type === "Key"
-          ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
+          ? C.Credential.new_pub_key(
+              C.Ed25519KeyHash.from_hex(
+                addressDetails.stakeCredential.hash,
               ),
             )
-          : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
+          : C.Credential.new_script(
+              C.ScriptHash.from_hex(
+                addressDetails.stakeCredential.hash,
               ),
             );
 
       let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_delegation(
-          C.StakeDelegation.new(
-            credential,
-            C.Ed25519KeyHash.from_bech32(poolId),
-          ),
+          credential,
+          C.Ed25519KeyHash.from_bech32(poolId)
         ),
       );
       let cr: C.CertificateBuilderResult;
       if (redeemer) {
-        let script = this.scripts[credential.to_scripthash()?.to_hex()!];
+        if (!credential.as_script()){
+          throw "Cannot provide redeemer for non-script!";
+        }
+        let script = this.scripts[credential.as_script()?.to_hex()!];
         if (!script) {
           throw "Scripts must be attached BEFORE they are used";
         }
@@ -396,24 +393,24 @@ export class Tx {
           cr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_script(script.inlineScript),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         } else {
           cr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         }
       } else {
         if (credential.kind() == 0) {
           cr = certBuilder.payment_key();
         } else {
-          let ns = this.native_scripts[credential.to_scripthash()?.to_hex()!];
+          let ns = this.native_scripts[credential.as_script()?.to_hex()!];
           if (!ns) {
             throw "Script with no redeemer should be a nativescript, but none provided";
           } else {
@@ -441,21 +438,21 @@ export class Tx {
       }
       const credential =
         addressDetails.stakeCredential.type === "Key"
-          ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
+          ? C.Credential.new_pub_key(
+              C.Ed25519KeyHash.from_hex(
+                addressDetails.stakeCredential.hash,
               ),
             )
-          : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
+          : C.Credential.new_script(
+              C.ScriptHash.from_hex(
+                addressDetails.stakeCredential.hash,
+              )
             );
 
       that.txBuilder.add_cert(
         C.SingleCertificateBuilder.new(
           C.Certificate.new_stake_registration(
-            C.StakeRegistration.new(credential),
+            credential,
           ),
         ).skip_witness(),
       );
@@ -474,25 +471,25 @@ export class Tx {
       }
       const credential =
         addressDetails.stakeCredential.type === "Key"
-          ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
+          ? C.Credential.new_pub_key(
+              C.Ed25519KeyHash.from_hex(
+                addressDetails.stakeCredential.hash,
               ),
             )
-          : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
+          : C.Credential.new_script(
+              C.ScriptHash.from_hex(
+                addressDetails.stakeCredential.hash,
               ),
             );
 
       let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_deregistration(
-          C.StakeDeregistration.new(credential),
+          credential
         ),
       );
       let cr: C.CertificateBuilderResult;
       if (redeemer) {
-        let script = this.scripts[credential.to_scripthash()?.to_hex()!];
+        let script = this.scripts[credential.as_script()?.to_hex()!];
         if (!script) {
           throw "Scripts must be attached BEFORE they are used";
         }
@@ -500,24 +497,24 @@ export class Tx {
           cr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_script(script.inlineScript),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         } else {
           cr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         }
       } else {
         if (credential.kind() == 0) {
           cr = certBuilder.payment_key();
         } else {
-          let ns = this.native_scripts[credential.to_scripthash()?.to_hex()!];
+          let ns = this.native_scripts[credential.as_script()?.to_hex()!];
           if (!ns) {
             throw "Script with no redeemer should be a nativescript, but none provided";
           } else {
@@ -573,7 +570,8 @@ export class Tx {
   retirePool(poolId: PoolId, epoch: number): Tx {
     this.tasks.push((that) => {
       const certificate = C.Certificate.new_pool_retirement(
-        C.PoolRetirement.new(C.Ed25519KeyHash.from_bech32(poolId), epoch),
+        C.Ed25519KeyHash.from_bech32(poolId),
+        BigInt(epoch)
       );
       that.txBuilder.add_cert(certificate);
     });
@@ -591,12 +589,16 @@ export class Tx {
       )!;
       let certBuilder = C.SingleWithdrawalBuilder.new(
         rewAdd,
-        C.BigNum.from_str(amount.toString()),
+        amount,
       );
       let wr: C.WithdrawalBuilderResult;
       if (redeemer) {
+        let scriptHash = rewAdd.to_address().payment_cred()?.as_script()?.to_hex()
+        if (!scriptHash){
+          throw "Could not get script hash from rewardAddress (perhaps it is a pubkey not script!?)"
+        }
         let script =
-          this.scripts[rewAdd.payment_cred()?.to_scripthash()?.to_hex()!];
+          this.scripts[rewAdd.to_address().payment_cred()?.as_script()?.to_hex()!];
         if (!script) {
           throw "Scripts must be attached BEFORE they are used";
         }
@@ -604,17 +606,17 @@ export class Tx {
           wr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_script(script.inlineScript),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         } else {
           wr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
-            C.Ed25519KeyHashes.new(),
+            C.RequiredSigners.new(),
           );
         }
       } else {
@@ -667,7 +669,7 @@ export class Tx {
   addSignerKey(keyHash: PaymentKeyHash | StakeKeyHash): Tx {
     this.tasks.push((that) => {
       that.txBuilder.add_required_signer(
-        C.Ed25519KeyHash.from_bytes(fromHex(keyHash)),
+        C.Ed25519KeyHash.from_hex(keyHash),
       );
     });
     return this;
@@ -677,7 +679,7 @@ export class Tx {
     this.tasks.push((that) => {
       const slot = that.translucent.utils.unixTimeToSlot(unixTime);
       that.txBuilder.set_validity_start_interval(
-        C.BigNum.from_str(slot.toString()),
+        BigInt(slot),
       );
     });
     return this;
@@ -686,7 +688,7 @@ export class Tx {
   validTo(unixTime: UnixTime): Tx {
     this.tasks.push((that) => {
       const slot = that.translucent.utils.unixTimeToSlot(unixTime);
-      that.txBuilder.set_ttl(C.BigNum.from_str(slot.toString()));
+      that.txBuilder.set_ttl(BigInt(slot));
       //todo: we need to make the tx builder fail if the intervals are wrong for native scripts.
     });
     return this;
@@ -694,12 +696,9 @@ export class Tx {
 
   attachMetadata(label: Label, metadata: Json): Tx {
     this.tasks.push((that) => {
-      let aux = C.AuxiliaryData.new();
-      aux.add_metadatum(
-        C.BigNum.from_str(label.toString()),
-        C.TransactionMetadatum.new_text(JSON.stringify(metadata)),
-      );
-      that.txBuilder.add_auxiliary_data(aux);
+      let md = C.Metadata.new()
+      md.set(BigInt(label), C.TransactionMetadatum.new_text(JSON.stringify(metadata)))
+      that.txBuilder.add_auxiliary_data(C.AuxiliaryData.new_shelley(md));
     });
     return this;
   }
@@ -707,9 +706,12 @@ export class Tx {
   /** Converts strings to bytes if prefixed with **'0x'**. */
   attachMetadataWithConversion(label: Label, metadata: Json): Tx {
     this.tasks.push((that) => {
+      let md = C.Metadata.new()
+      md.set(BigInt(label), C.TransactionMetadatum.new_text(JSON.stringify(metadata)))
+      
       let aux = C.AuxiliaryData.new();
       aux.add_json_metadatum_with_schema(
-        C.BigNum.from_str(label.toString()),
+        BigInt(label),
         JSON.stringify(metadata),
         C.MetadataJsonSchema.BasicConversions,
       );
@@ -736,7 +738,7 @@ export class Tx {
   addNetworkId(id: number): Tx {
     this.tasks.push((that) => {
       that.txBuilder.set_network_id(
-        C.NetworkId.from_bytes(fromHex(id.toString(16).padStart(2, "0"))),
+        C.NetworkId.from_cbor_hex(id.toString(16).padStart(2, "0")),
       );
     });
     return this;
@@ -779,17 +781,17 @@ export class Tx {
     | CertificateValidator
     | WithdrawalValidator) {
     if (type === "Native") {
-      let ns = C.NativeScript.from_bytes(fromHex(script));
+      let ns = C.NativeScript.from_cbor_hex(script);
       this.native_scripts[ns.hash().to_hex()] = ns;
     } else if (type === "PlutusV1" || type === "PlutusV2") {
-      let ps: C.PlutusScript;
+      let ps: C.Script;
       if (type === "PlutusV1") {
-        ps = C.PlutusScript.from_v1(
-          C.PlutusV1Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
+        ps = C.Script.new_plutus_v1(
+          C.PlutusV1Script.from_cbor_hex(applyDoubleCborEncoding(script)),
         );
       } else {
-        ps = C.PlutusScript.from_v2(
-          C.PlutusV2Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
+        ps = C.Script.new_plutus_v2(
+          C.PlutusV2Script.from_cbor_hex(applyDoubleCborEncoding(script)),
         );
       }
       this.scripts[ps.hash().to_hex().toString()] = { inlineScript: ps };
@@ -875,7 +877,7 @@ export class Tx {
         ? await this.translucent.provider.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
         let multiAsset = foundUtxo.output().amount().multiasset()
-        amtBuilder = amtBuilder.with_asset_and_min_required_coin(multiAsset || C.MultiAsset.new(), C.BigNum.from_str(params.coinsPerUtxoByte.toString()))
+        amtBuilder = amtBuilder.with_asset_and_min_required_coin(multiAsset || C.MultiAsset.new(), params.coinsPerUtxoByte)
         const collateralReturn = amtBuilder.build().output()
         this.txBuilder.add_collateral(collateralUTxO)
         //this.txBuilder.add_input(collateralUTxO)
@@ -902,14 +904,14 @@ export class Tx {
       let witnessSet = draftTx.witness_set()
       let redeemers = witnessSet.redeemers();
       if (redeemers) {
-        let newRedeemers = C.Redeemers.new();
+        let newRedeemers = C.RedeemerList.new();
         for (let i = 0; i < redeemers!.len(); i++) {
           let redeemer = redeemers.get(i);
           let new_redeemer = C.Redeemer.new(
             redeemer.tag(),
             redeemer.index(),
             redeemer.data(),
-            C.ExUnits.new(C.BigNum.zero(), C.BigNum.zero()),
+            C.ExUnits.new(0n, 0n),
           );
           newRedeemers.add(new_redeemer);
         }
@@ -921,7 +923,7 @@ export class Tx {
         );
       }
     }
-    let draftTxBytes = draftTx.to_bytes();
+    let draftTxBytes = draftTx.to_cbor_bytes();
     const uplcResults = U.eval_phase_two_raw(
       draftTxBytes,
       allUtxos.map((x) => x.input().to_bytes()),
@@ -934,7 +936,7 @@ export class Tx {
       slotConfig.slotLength,
     );
     for (const redeemerBytes of uplcResults) {
-      let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes);
+      let redeemer: C.Redeemer = C.Redeemer.from_cbor_bytes(redeemerBytes);
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
         redeemer.ex_units(),
@@ -944,7 +946,7 @@ export class Tx {
     let wsb = builtTx.witness_set()
     for (const pv2S of Object.values(this.scripts)){
       if ('referenceScript' in pv2S) {
-        wsb.add_plutus_v2_script(pv2S.referenceScript)
+        wsb.add_script(pv2S.referenceScript)
       }
     }
     
@@ -962,25 +964,25 @@ async function createPoolRegistration(
   poolParams: PoolParams,
   translucent: Translucent,
 ): Promise<C.PoolRegistration> {
-  const poolOwners = C.Ed25519KeyHashes.new();
-  poolParams.owners.forEach((owner) => {
+  const poolOwners = C.RequiredSigners.new();
+  for (const owner of poolParams.owners) {
     const { stakeCredential } = translucent.utils.getAddressDetails(owner);
     if (stakeCredential?.type === "Key") {
       poolOwners.add(C.Ed25519KeyHash.from_hex(stakeCredential.hash));
     } else throw new Error("Only key hashes allowed for pool owners.");
-  });
+  }
 
   const metadata = poolParams.metadataUrl
     ? await fetch(poolParams.metadataUrl).then((res) => res.arrayBuffer())
     : null;
 
   const metadataHash = metadata
-    ? C.PoolMetadata.from_bytes(
+    ? C.PoolMetadata.from_cbor_bytes(
         Buffer.from(new Uint8Array(metadata)),
       ).pool_metadata_hash()
     : null;
 
-  const relays = C.Relays.new();
+  const relays = C.RelayList.new();
   poolParams.relays.forEach((relay) => {
     switch (relay.type) {
       case "SingleHostIp": {
@@ -1025,11 +1027,11 @@ async function createPoolRegistration(
     C.PoolParams.new(
       C.Ed25519KeyHash.from_bech32(poolParams.poolId),
       C.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
-      C.BigNum.from_str(poolParams.pledge.toString()),
-      C.BigNum.from_str(poolParams.cost.toString()),
+      poolParams.pledge,
+      poolParams.cost,
       C.UnitInterval.new(
-        C.BigNum.from_str(poolParams.margin[0].toString()),
-        C.BigNum.from_str(poolParams.margin[1].toString()),
+        poolParams.margin[0],
+        poolParams.margin[1],
       ),
       C.RewardAddress.from_address(
         addressFromWithNetworkCheck(poolParams.rewardAddress, translucent),
@@ -1037,7 +1039,7 @@ async function createPoolRegistration(
       poolOwners,
       relays,
       metadataHash
-        ? C.PoolMetadata.new(C.URL.new(poolParams.metadataUrl!), metadataHash)
+        ? C.PoolMetadata.new(C.Url.from_cbor_hex(poolParams.metadataUrl!), metadataHash)
         : undefined,
     ),
   );

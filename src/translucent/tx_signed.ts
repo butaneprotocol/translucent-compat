@@ -14,12 +14,12 @@ export class TxSigned {
   async submit(): Promise<TxHash> {
     return await (
       this.translucent.wallet || this.translucent.provider
-    ).submitTx(toHex(this.txSigned.to_bytes()));
+    ).submitTx(toHex(this.txSigned.to_cbor_bytes()));
   }
 
   /** Returns the transaction in Hex encoded Cbor. */
   toString(): Transaction {
-    return toHex(this.txSigned.to_bytes());
+    return toHex(this.txSigned.to_cbor_bytes());
   }
 
   /** Return the transaction hash. */
