@@ -78,7 +78,6 @@ export class Kupmios implements Provider {
             }: ogmios.QueryLedgerStateProtocolParametersResponse = JSON.parse(
               fromMaybeBuffer(msg.data),
             );
-
             // deno-lint-ignore no-explicit-any
             const costModels: CostModels = {
               PlutusV1: Object.fromEntries(
@@ -200,11 +199,15 @@ export class Kupmios implements Provider {
       transaction_id: string;
       output_index: number;
     }[];
+    if (result!=undefined) {
     return await this.getUtxosByOutRef(
       result.map((x) => {
         return { txHash: x.transaction_id, outputIndex: x.output_index };
       }),
     );
+    }else{
+      throw "Result was undefined"
+    }
   }
 
   async getUtxoByUnit(unit: Unit): Promise<UTxO> {

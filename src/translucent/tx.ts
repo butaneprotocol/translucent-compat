@@ -860,9 +860,8 @@ export class Tx {
       );
     }
     this.txBuilder.select_utxos(2);
-
     {
-      let foundUtxo = walletUTxOs.find((x)=>BigInt(x.output().amount().coin().to_str())>=(BigInt(Math.pow(10, 7))))
+      let foundUtxo = walletUTxOs.find((x)=>BigInt(x.output().amount().coin().to_str())>=(BigInt(20*Math.pow(10, 7))))
       if (foundUtxo==undefined){
         throw "Could not find a suitable collateral UTxO."
       }else{
@@ -879,6 +878,7 @@ export class Tx {
         amtBuilder = amtBuilder.with_asset_and_min_required_coin(multiAsset || C.MultiAsset.new(), C.BigNum.from_str(params.coinsPerUtxoByte.toString()))
         const collateralReturn = amtBuilder.build().output()
         this.txBuilder.add_collateral(collateralUTxO)
+        //this.txBuilder.add_input(collateralUTxO)
         this.txBuilder.set_collateral_return(collateralReturn)
       }
     }
@@ -897,9 +897,10 @@ export class Tx {
     const slotConfig: SlotConfig =
       SLOT_CONFIG_NETWORK[this.translucent.network];
     let draftTx = txRedeemerBuilder.draft_tx();
+    //let newDraft = C.Transaction.new(draftTx.body(), C.TransactionWitnessSet.new(), undefined)
     {
-      let redeemers = draftTx.witness_set().redeemers();
-
+      let witnessSet = draftTx.witness_set()
+      let redeemers = witnessSet.redeemers();
       if (redeemers) {
         let newRedeemers = C.Redeemers.new();
         for (let i = 0; i < redeemers!.len(); i++) {
@@ -912,11 +913,10 @@ export class Tx {
           );
           newRedeemers.add(new_redeemer);
         }
-        let new_witnesses = draftTx.witness_set();
-        new_witnesses.set_redeemers(newRedeemers);
+        witnessSet.set_redeemers(newRedeemers);
         draftTx = C.Transaction.new(
           draftTx.body(),
-          new_witnesses,
+          witnessSet,
           draftTx.auxiliary_data(),
         );
       }
@@ -940,8 +940,15 @@ export class Tx {
         redeemer.ex_units(),
       );
     }
-    let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked();
-    return new TxComplete(this.translucent, builtTx);
+    let builtTx = this.txBuilder.build(0, changeAddress)
+    let wsb = builtTx.witness_set()
+    for (const pv2S of Object.values(this.scripts)){
+      if ('referenceScript' in pv2S) {
+        wsb.add_plutus_v2_script(pv2S.referenceScript)
+      }
+    }
+    
+    return new TxComplete(this.translucent, builtTx.build_checked());
   }
 
   /** Return the current transaction body in Hex encoded Cbor. */
