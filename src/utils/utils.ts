@@ -505,14 +505,14 @@ export function fromScriptRef(scriptRef: C.ScriptRef): Script {
   }
 }
 
-export function toScriptRef(script: Script): C.ScriptRef {
+export function toScriptRef(script: Script): C.Script {
   switch (script.type) {
     case "Native":
-      return C.ScriptRef.new(
+      return C.Script.new_native(
         C.Script.new_native(C.NativeScript.from_bytes(fromHex(script.script))),
       );
     case "PlutusV1":
-      return C.ScriptRef.new(
+      return C.Script.new_plutus_v1(
         C.Script.new_plutus_v1(
           C.PlutusV1Script.from_bytes(
             fromHex(applyDoubleCborEncoding(script.script)),
@@ -520,7 +520,7 @@ export function toScriptRef(script: Script): C.ScriptRef {
         ),
       );
     case "PlutusV2":
-      return C.ScriptRef.new(
+      return C.Script.new_plutus_v1(
         C.Script.new_plutus_v2(
           C.PlutusV2Script.from_bytes(
             fromHex(applyDoubleCborEncoding(script.script)),
@@ -697,45 +697,45 @@ export function fromUnit(unit: Unit): {
 export function nativeScriptFromJson(nativeScript: NativeScript): Script {
   return {
     type: "Native",
-    script: toHex(doNativeScriptFromJSON(nativeScript).to_bytes()),
+    script: toHex(doNativeScriptFromJSON(nativeScript).to_cbor_bytes()),
   };
 }
 
 function doNativeScriptFromJSON(nativeScript: NativeScript): C.NativeScript {
   if (nativeScript.type === "sig") {
     return C.NativeScript.new_script_pubkey(
-      C.ScriptPubkey.new(C.Ed25519KeyHash.from_hex(nativeScript.keyHash)),
+      C.Ed25519KeyHash.from_hex(nativeScript.keyHash),
     );
   } else if (nativeScript.type === "all") {
-    const nativeScripts = C.NativeScripts.new();
+    const nativeScripts = C.NativeScriptList.new();
     for (const subScript of nativeScript.scripts) {
       let subNativeScript = doNativeScriptFromJSON(subScript);
       nativeScripts.add(subNativeScript);
     }
-    return C.NativeScript.new_script_all(C.ScriptAll.new(nativeScripts));
+    return C.NativeScript.new_script_all(nativeScripts);
   } else if (nativeScript.type === "any") {
-    const nativeScripts = C.NativeScripts.new();
+    const nativeScripts = C.NativeScriptList.new();
     for (const subScript of nativeScript.scripts) {
       let subNativeScript = doNativeScriptFromJSON(subScript);
       nativeScripts.add(subNativeScript);
     }
-    return C.NativeScript.new_script_all(C.ScriptAny.new(nativeScripts));
+    return C.NativeScript.new_script_any(nativeScripts);
   } else if (nativeScript.type === "before") {
-    return C.NativeScript.new_timelock_start(
-      C.TimelockStart.new(C.BigNum.from_str(nativeScript.slot.toString())),
+    return C.NativeScript.new_script_invalid_before(
+      BigInt(nativeScript.slot)
     );
   } else if (nativeScript.type === "after") {
-    return C.NativeScript.new_timelock_expiry(
-      C.TimelockExpiry.new(C.BigNum.from_str(nativeScript.slot.toString())),
+    return C.NativeScript.new_script_invalid_hereafter(
+      BigInt(nativeScript.slot),
     );
   } else if (nativeScript.type === "atLeast") {
-    const nativeScripts = C.NativeScripts.new();
+    const nativeScripts = C.NativeScriptList.new();
     for (const subScript of nativeScript.scripts) {
       let subNativeScript = doNativeScriptFromJSON(subScript);
       nativeScripts.add(subNativeScript);
     }
     return C.NativeScript.new_script_n_of_k(
-      C.ScriptNOfK.new(nativeScript.required, nativeScripts),
+      BigInt(nativeScript.required), nativeScripts
     );
   }
   throw "No nativescript type variants matched";
@@ -755,12 +755,12 @@ export function applyParamsToScript<T extends unknown[] = Data[]>(
 /** Returns double cbor encoded script. If script is already double cbor encoded it's returned as it is. */
 export function applyDoubleCborEncoding(script: string): string {
   try {
-    C.PlutusV2Script.from_bytes(
-      C.PlutusV2Script.from_bytes(fromHex(script)).bytes(),
+    C.PlutusV2Script.from_cbor_bytes(
+      C.PlutusV2Script.from_cbor_hex(script).get(),
     );
     return script;
   } catch (_e) {
-    return toHex(C.PlutusV2Script.new(fromHex(script)).to_bytes());
+    return toHex(C.PlutusV2Script.from_cbor_hex(script).get());
   }
 }
 

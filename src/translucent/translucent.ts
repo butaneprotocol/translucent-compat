@@ -225,12 +225,7 @@ export class Translucent {
     this.wallet = {
       // deno-lint-ignore require-await
       address: async (): Promise<Address> =>
-        C.Address.new(
-          this.network === "Mainnet" ? 1 : 0,
-          C.Credential.new_pub_key(pubKeyHash),
-        )
-          .to_address()
-          .to_bech32(undefined),
+        C.Address.from_hex(pubKeyHash.to_hex()).to_bech32(this.network == "Mainnet" ? "addr_" : "addr_test"),
       // deno-lint-ignore require-await
       rewardAddress: async (): Promise<RewardAddress | null> => null,
       getUtxos: async (): Promise<UTxO[]> => {
@@ -238,15 +233,10 @@ export class Translucent {
           paymentCredentialOf(await this.wallet.address()),
         );
       },
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const utxos = await this.utxosAt(
-          paymentCredentialOf(await this.wallet.address()),
-        );
-        const coreUtxos = C.TransactionUnspentOutputs.new();
-        utxos.forEach((utxo) => {
-          coreUtxos.add(utxoToCore(utxo));
-        });
-        return coreUtxos;
+      getUtxosCore: async (): Promise<C.TransactionUnspentOutput[]> => {
+        return (await this.utxosAt(
+          paymentCredentialOf(await this.wallet.address())
+        )).map((utxo) => utxoToCore(utxo));
       },
       // deno-lint-ignore require-await
       getDelegation: async (): Promise<Delegation> => {
@@ -254,9 +244,10 @@ export class Translucent {
       },
       // deno-lint-ignore require-await
       signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
-        const witness = C.make_vkey_witness(
-          C.hash_transaction(tx.body()),
-          priv,
+        let pubkey = priv.to_public()
+        const witness = C.Vkeywitness.new(
+          priv.to_public(),
+          priv.sign(tx.body().to_cbor_bytes())
         );
         const txWitnessSetBuilder = C.TransactionWitnessSetBuilder.new();
         txWitnessSetBuilder.add_vkey(witness);
@@ -315,19 +306,17 @@ export class Translucent {
       },
       getUtxos: async (): Promise<UTxO[]> => {
         const utxos = ((await api.getUtxos()) || []).map((utxo) => {
-          const parsedUtxo = C.TransactionUnspentOutput.from_bytes(
-            fromHex(utxo),
+          const parsedUtxo = C.TransactionUnspentOutput.from_cbor_hex(
+            utxo
           );
           return coreToUtxo(parsedUtxo);
         });
         return utxos;
       },
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const utxos = C.TransactionUnspentOutputs.new();
-        ((await api.getUtxos()) || []).forEach((utxo) => {
-          utxos.add(C.TransactionUnspentOutput.from_bytes(fromHex(utxo)));
+      getUtxosCore: async (): Promise<C.TransactionUnspentOutput[]> => {
+        return ((await api.getUtxos()) || []).map((utxo) => {
+          return C.TransactionUnspentOutput.from_cbor_hex(utxo);
         });
-        return utxos;
       },
       getDelegation: async (): Promise<Delegation> => {
         const rewardAddr = await this.wallet.rewardAddress();
@@ -337,14 +326,14 @@ export class Translucent {
           : { poolId: null, rewards: 0n };
       },
       signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
-        const witnessSet = await api.signTx(toHex(tx.to_bytes()), true);
-        return C.TransactionWitnessSet.from_bytes(fromHex(witnessSet));
+        const witnessSet = await api.signTx(tx.to_cbor_hex(), true);
+        return C.TransactionWitnessSet.from_cbor_hex(witnessSet);
       },
       signMessage: async (
         address: Address | RewardAddress,
         payload: Payload,
       ): Promise<SignedMessage> => {
-        const hexAddress = toHex(C.Address.from_bech32(address).to_bytes());
+        const hexAddress = C.Address.from_bech32(address).to_hex();
         return await api.signData(hexAddress, payload);
       },
       submitTx: async (tx: Transaction): Promise<TxHash> => {
@@ -376,7 +365,7 @@ export class Translucent {
                 if (addressDetails.stakeCredential.type === "Key") {
                   return C.RewardAddress.new(
                     this.network === "Mainnet" ? 1 : 0,
-                    C.StakeCredential.from_keyhash(
+                    C.Credential.new_pub_key(
                       C.Ed25519KeyHash.from_hex(
                         addressDetails.stakeCredential.hash,
                       ),
@@ -387,7 +376,7 @@ export class Translucent {
                 }
                 return C.RewardAddress.new(
                   this.network === "Mainnet" ? 1 : 0,
-                  C.StakeCredential.from_scripthash(
+                  C.Credential.new_script(
                     C.ScriptHash.from_hex(addressDetails.stakeCredential.hash),
                   ),
                 )
@@ -400,13 +389,11 @@ export class Translucent {
       getUtxos: async (): Promise<UTxO[]> => {
         return utxos ? utxos : await this.utxosAt(paymentCredentialOf(address));
       },
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const coreUtxos = C.TransactionUnspentOutputs.new();
-        (utxos
+      getUtxosCore: async (): Promise<C.TransactionUnspentOutput[]> => {
+        return (utxos
           ? utxos
           : await this.utxosAt(paymentCredentialOf(address))
-        ).forEach((utxo) => coreUtxos.add(utxoToCore(utxo)));
-        return coreUtxos;
+        ).map((utxo) => utxoToCore(utxo));
       },
       getDelegation: async (): Promise<Delegation> => {
         const rewardAddr = await this.wallet.rewardAddress();
@@ -474,13 +461,11 @@ export class Translucent {
       // deno-lint-ignore require-await
       getUtxos: async (): Promise<UTxO[]> =>
         this.utxosAt(paymentCredentialOf(address)),
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const coreUtxos = C.TransactionUnspentOutputs.new();
-        (await this.utxosAt(paymentCredentialOf(address))).forEach((utxo) =>
-          coreUtxos.add(utxoToCore(utxo)),
-        );
-        return coreUtxos;
-      },
+      getUtxosCore: async (): Promise<C.TransactionUnspentOutput[]> => 
+        (await this.utxosAt(paymentCredentialOf(address))).map((utxo) =>
+          utxoToCore(utxo),
+        )
+      ,
       getDelegation: async (): Promise<Delegation> => {
         const rewardAddr = await this.wallet.rewardAddress();
 
@@ -501,9 +486,10 @@ export class Translucent {
 
         const txWitnessSetBuilder = C.TransactionWitnessSetBuilder.new();
         usedKeyHashes.forEach((keyHash) => {
-          const witness = C.make_vkey_witness(
-            C.hash_transaction(tx.body()),
-            C.PrivateKey.from_bech32(privKeyHashMap[keyHash]!),
+          let priv = C.PrivateKey.from_bech32(privKeyHashMap[keyHash]!)
+          const witness = C.Vkeywitness.new(
+            priv.to_public(),
+            priv.sign(tx.body().to_cbor_bytes())
           );
           txWitnessSetBuilder.add_vkey(witness);
         });
