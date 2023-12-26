@@ -9,15 +9,27 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v3
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
+
+      - name: Setup environment
+        env:
+          SECRETS: ${{ toJSON(secrets) }}
+          # ENV_VARS: ${{ toJSON(vars) }}
+        run: |
+          echo "[$SECRETS]" | jq -r 'flatten[] | to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+
       - name: Install Dependencies
         run: bun install --frozen-lockfile
+
       - name: Formatting Checks
         run: |
           bun prettier --check .
+
       # - name: Lint and Compile Checks
       #   run: |
       #     bun run lint
+      
       - name: Tests
         run: bun test --timeout 10000
