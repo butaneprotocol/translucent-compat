@@ -47,7 +47,7 @@ export class Utils {
   ): Address {
     const validatorHash = this.validatorToScriptHash(validator);
     if (stakeCredential) {
-      return C.BaseAddress.new(
+      return C.Address.new(
         networkToId(this.translucent.network),
         C.StakeCredential.from_scripthash(C.ScriptHash.from_hex(validatorHash)),
         stakeCredential.type === "Key"
@@ -68,6 +68,7 @@ export class Utils {
         .to_address()
         .to_bech32(undefined);
     }
+    
   }
 
   credentialToAddress(
@@ -114,7 +115,7 @@ export class Utils {
     validator: CertificateValidator | WithdrawalValidator,
   ): RewardAddress {
     const validatorHash = this.validatorToScriptHash(validator);
-    return C.RewardAddress.new(
+    return C.Address.new(
       networkToId(this.translucent.network),
       C.StakeCredential.from_scripthash(C.ScriptHash.from_hex(validatorHash)),
     )
@@ -138,29 +139,24 @@ export class Utils {
   }
 
   validatorToScriptHash(validator: Validator): ScriptHash {
-    switch (validator.type) {
-      case "Native":
-        return C.NativeScript.from_bytes(fromHex(validator.script))
-          .hash()
-          .to_hex();
-      case "PlutusV1":
-        return C.PlutusScript.from_v1(
-          C.PlutusV1Script.from_bytes(
-            fromHex(applyDoubleCborEncoding(validator.script)),
-          ),
+    if (validator.type === "Native") {
+      return C.NativeScript.from_cbor_hex(validator.script)
+        .hash()
+        .to_hex();
+    } else if (validator.type === "PlutusV1") {
+      return C.PlutusV1Script.from_cbor_hex(
+          applyDoubleCborEncoding(validator.script),
         )
-          .hash()
-          .to_hex();
-      case "PlutusV2":
-        return C.PlutusScript.from_v2(
-          C.PlutusV2Script.from_bytes(
-            fromHex(applyDoubleCborEncoding(validator.script)),
-          ),
-        )
-          .hash()
-          .to_hex();
-      default:
-        throw new Error("No variant matched");
+        .hash()
+        .to_hex();
+    } else if (validator.type === "PlutusV2") {
+      return C.PlutusV2Script.from_cbor_hex(
+        applyDoubleCborEncoding(validator.script),
+      )
+      .hash()
+      .to_hex();
+    } else {
+      throw new Error("No variant matched");
     }
   }
 
@@ -169,7 +165,7 @@ export class Utils {
   }
 
   datumToHash(datum: Datum): DatumHash {
-    return C.hash_plutus_data(C.PlutusData.from_bytes(fromHex(datum))).to_hex();
+    return C.hash_plutus_data(C.PlutusData.from_cbor_hex(datum)).to_hex();
   }
 
   scriptHashToCredential(scriptHash: ScriptHash): Credential {
@@ -232,7 +228,7 @@ export class Utils {
 
 function addressFromHexOrBech32(address: string): C.Address {
   try {
-    return C.Address.from_bytes(fromHex(address));
+    return C.Address.from_hex(address);
   } catch (_e) {
     try {
       return C.Address.from_bech32(address);
@@ -246,129 +242,37 @@ function addressFromHexOrBech32(address: string): C.Address {
 export function getAddressDetails(address: string): AddressDetails {
   // Base Address
   try {
-    const parsedAddress = C.BaseAddress.from_address(
-      addressFromHexOrBech32(address),
-    )!;
+    const parsedAddress = addressFromHexOrBech32(address)
     const paymentCredential: Credential =
-      parsedAddress.payment_cred().kind() === 0
+      parsedAddress.payment_cred()!.kind() === 0
         ? {
             type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
+            hash: parsedAddress.payment_cred()!.as_pub_key()!.to_hex(),
           }
         : {
             type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
+            hash: 
+              parsedAddress.payment_cred()!.as_script()!.to_hex(),
+            
           };
     const stakeCredential: Credential =
-      parsedAddress.stake_cred().kind() === 0
+      parsedAddress.staking_cred()!.kind() === 0
         ? {
             type: "Key",
-            hash: toHex(parsedAddress.stake_cred().to_keyhash()!.to_bytes()),
+            hash: parsedAddress.staking_cred()!.as_pub_key()!.to_hex(),
           }
         : {
             type: "Script",
-            hash: toHex(parsedAddress.stake_cred().to_scripthash()!.to_bytes()),
+            hash: parsedAddress.staking_cred()!.as_script()!.to_hex(),
           };
     return {
       type: "Base",
-      networkId: parsedAddress.to_address().network_id(),
+      networkId: parsedAddress.network_id(),
       address: {
-        bech32: parsedAddress.to_address().to_bech32(undefined),
-        hex: toHex(parsedAddress.to_address().to_bytes()),
+        bech32: parsedAddress.to_bech32(undefined),
+        hex: parsedAddress.to_hex(),
       },
       paymentCredential,
-      stakeCredential,
-    };
-  } catch (_e) {
-    /* pass */
-  }
-
-  // Enterprise Address
-  try {
-    const parsedAddress = C.EnterpriseAddress.from_address(
-      addressFromHexOrBech32(address),
-    )!;
-    const paymentCredential: Credential =
-      parsedAddress.payment_cred().kind() === 0
-        ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
-        : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
-    return {
-      type: "Enterprise",
-      networkId: parsedAddress.to_address().network_id(),
-      address: {
-        bech32: parsedAddress.to_address().to_bech32(undefined),
-        hex: toHex(parsedAddress.to_address().to_bytes()),
-      },
-      paymentCredential,
-    };
-  } catch (_e) {
-    /* pass */
-  }
-
-  // Pointer Address
-  try {
-    const parsedAddress = C.PointerAddress.from_address(
-      addressFromHexOrBech32(address),
-    )!;
-    const paymentCredential: Credential =
-      parsedAddress.payment_cred().kind() === 0
-        ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
-        : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
-    return {
-      type: "Pointer",
-      networkId: parsedAddress.to_address().network_id(),
-      address: {
-        bech32: parsedAddress.to_address().to_bech32(undefined),
-        hex: toHex(parsedAddress.to_address().to_bytes()),
-      },
-      paymentCredential,
-    };
-  } catch (_e) {
-    /* pass */
-  }
-
-  // Reward Address
-  try {
-    const parsedAddress = C.RewardAddress.from_address(
-      addressFromHexOrBech32(address),
-    )!;
-    const stakeCredential: Credential =
-      parsedAddress.payment_cred().kind() === 0
-        ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
-        : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
-    return {
-      type: "Reward",
-      networkId: parsedAddress.to_address().network_id(),
-      address: {
-        bech32: parsedAddress.to_address().to_bech32(undefined),
-        hex: toHex(parsedAddress.to_address().to_bytes()),
-      },
       stakeCredential,
     };
   } catch (_e) {
@@ -379,7 +283,7 @@ export function getAddressDetails(address: string): AddressDetails {
   try {
     const parsedAddress = ((address: string): C.ByronAddress => {
       try {
-        return C.ByronAddress.from_bytes(fromHex(address));
+        return C.ByronAddress.from_address(C.Address.from_hex(address))!;
       } catch (_e) {
         try {
           return C.ByronAddress.from_base58(address);
@@ -394,7 +298,7 @@ export function getAddressDetails(address: string): AddressDetails {
       networkId: parsedAddress.to_address().network_id(),
       address: {
         bech32: "",
-        hex: toHex(parsedAddress.to_address().to_bytes()),
+        hex: toHex(parsedAddress.to_address().to_raw_bytes()),
       },
     };
   } catch (_e) {
@@ -434,19 +338,19 @@ export function generateSeedPhrase(): string {
 
 export function valueToAssets(value: C.Value): Assets {
   const assets: Assets = {};
-  assets["lovelace"] = BigInt(value.coin().to_str());
-  const ma = value.multiasset();
+  assets["lovelace"] = value.coin()
+  const ma = value.multi_asset();
   if (ma) {
     const multiAssets = ma.keys();
     for (let j = 0; j < multiAssets.len(); j++) {
       const policy = multiAssets.get(j);
-      const policyAssets = ma.get(policy)!;
+      const policyAssets = ma.get_assets(policy)!;
       const assetNames = policyAssets.keys();
       for (let k = 0; k < assetNames.len(); k++) {
         const policyAsset = assetNames.get(k);
         const quantity = policyAssets.get(policyAsset)!;
-        const unit = toHex(policy.to_bytes()) + toHex(policyAsset.name());
-        assets[unit] = BigInt(quantity.to_str());
+        const unit = toHex(policy.to_raw_bytes()) + fromText(policyAsset.to_str());
+        assets[unit] = quantity;
       }
     }
   }
@@ -466,70 +370,65 @@ export function assetsToValue(assets: Assets): C.Value {
   );
   policies.forEach((policy) => {
     const policyUnits = units.filter((unit) => unit.slice(0, 56) === policy);
-    const assetsValue = C.Assets.new();
+    const assetsValue = C.MapAssetNameToCoin.new();
     policyUnits.forEach((unit) => {
       assetsValue.insert(
-        C.AssetName.new(fromHex(unit.slice(56))),
-        C.BigNum.from_str(assets[unit].toString()),
+        C.AssetName.from_str(toText(unit.slice(56))),
+        assets[unit],
       );
     });
-    multiAsset.insert(C.ScriptHash.from_bytes(fromHex(policy)), assetsValue);
+    multiAsset.insert_assets(C.ScriptHash.from_hex(policy), assetsValue);
   });
   const value = C.Value.new(
-    C.BigNum.from_str(lovelace ? lovelace.toString() : "0"),
+    lovelace,
+    multiAsset
   );
-  if (units.length > 1 || !lovelace) value.set_multiasset(multiAsset);
   return value;
 }
 
-export function fromScriptRef(scriptRef: C.ScriptRef): Script {
-  const kind = scriptRef.script().kind();
-  switch (kind) {
-    case 0:
-      return {
-        type: "Native",
-        script: toHex(scriptRef.script().as_native()!.to_bytes()),
-      };
-    case 1:
-      return {
-        type: "PlutusV1",
-        script: toHex(scriptRef.script().as_plutus_v1()!.to_bytes()),
-      };
-    case 2:
-      return {
-        type: "PlutusV2",
-        script: toHex(scriptRef.script().as_plutus_v2()!.to_bytes()),
-      };
-    default:
-      throw new Error("No variant matched.");
+export function fromScriptRef(scriptRef: C.Script): Script {
+  const kind = scriptRef.kind();
+  if (kind === 0) {
+    return {
+      type: "Native",
+      script: toHex(scriptRef.as_native()!.to_cbor_bytes()),
+    };
+  } else if (kind === 1) {
+    return {
+      type: "PlutusV1",
+      script: toHex(scriptRef.as_plutus_v1()!.to_cbor_bytes()),
+    };
+  } else if (kind === 2) {
+    return {
+      type: "PlutusV2",
+      script: toHex(scriptRef.as_plutus_v2()!.to_cbor_bytes()),
+    };
+  } else {
+    throw new Error("No variant matched.");
   }
 }
 
 export function toScriptRef(script: Script): C.Script {
-  switch (script.type) {
-    case "Native":
-      return C.Script.new_native(
-        C.Script.new_native(C.NativeScript.from_bytes(fromHex(script.script))),
-      );
-    case "PlutusV1":
-      return C.Script.new_plutus_v1(
-        C.Script.new_plutus_v1(
-          C.PlutusV1Script.from_bytes(
-            fromHex(applyDoubleCborEncoding(script.script)),
-          ),
+  if (script.type === "Native") {
+    return C.Script.new_native(
+      C.NativeScript.from_cbor_hex(script.script),
+    );
+  } 
+  if (script.type === "PlutusV1") {
+    return C.Script.new_plutus_v1(
+        C.PlutusV1Script.from_cbor_hex(
+          applyDoubleCborEncoding(script.script),
         ),
-      );
-    case "PlutusV2":
-      return C.Script.new_plutus_v1(
-        C.Script.new_plutus_v2(
-          C.PlutusV2Script.from_bytes(
-            fromHex(applyDoubleCborEncoding(script.script)),
-          ),
+    );
+  } 
+  if (script.type === "PlutusV2") {
+    return C.Script.new_plutus_v1(
+        C.PlutusV2Script.from_cbor_hex(
+          applyDoubleCborEncoding(script.script),
         ),
-      );
-    default:
-      throw new Error("No variant matched.");
-  }
+    );
+  } 
+  throw new Error("No script variant matched for toScriptRef.");
 }
 
 export function utxoToCore(utxo: UTxO): C.TransactionUnspentOutput {
@@ -540,29 +439,35 @@ export function utxoToCore(utxo: UTxO): C.TransactionUnspentOutput {
       return C.ByronAddress.from_base58(utxo.address).to_address();
     }
   })();
-  const output = C.TransactionOutput.new(address, assetsToValue(utxo.assets));
+  const output: {
+    address: C.Address,
+    value: C.Value,
+    datum: C.DatumOption | undefined,
+    script_reference: C.Script | undefined,
+  } = {
+    address,
+    value: assetsToValue(utxo.assets),
+    datum: undefined,
+    script_reference: undefined,
+  }
   if (utxo.datumHash) {
-    output.set_datum(
-      C.Datum.new_data_hash(C.DataHash.from_bytes(fromHex(utxo.datumHash))),
-    );
+    output.datum = C.DatumOption.new_hash(C.DatumHash.from_hex(utxo.datumHash))
   }
   // inline datum
   if (!utxo.datumHash && utxo.datum) {
-    output.set_datum(
-      C.Datum.new_data(C.PlutusData.from_bytes(fromHex(utxo.datum))),
-    );
+    output.datum = C.DatumOption.new_datum(C.PlutusData.from_cbor_hex(utxo.datum!))
   }
 
   if (utxo.scriptRef) {
-    output.set_script_ref(toScriptRef(utxo.scriptRef));
+    output.script_reference = toScriptRef(utxo.scriptRef)
   }
 
   return C.TransactionUnspentOutput.new(
     C.TransactionInput.new(
-      C.TransactionHash.from_bytes(fromHex(utxo.txHash)),
-      C.BigNum.from_str(utxo.outputIndex.toString()),
+      C.TransactionHash.from_hex(utxo.txHash),
+      BigInt(utxo.outputIndex),
     ),
-    output,
+    C.TransactionOutput.new(output.address, output.value, output.datum, output.script_reference),
   );
 }
 

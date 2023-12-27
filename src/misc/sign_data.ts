@@ -30,7 +30,7 @@ export function signData(
 
   const priv = C.PrivateKey.from_bech32(privateKey);
 
-  const signedSigStruc = priv.sign(toSign).to_bytes();
+  const signedSigStruc = priv.sign(toSign).to_raw_bytes();
   const coseSign1 = builder.build(signedSigStruc);
 
   const key = M.COSEKey.new(
@@ -45,7 +45,7 @@ export function signData(
   ); // crv (-1) set to Ed25519 (6)
   key.set_header(
     M.Label.new_int(M.Int.new_negative(M.BigNum.from_str("2"))),
-    M.CBORValue.new_bytes(priv.to_public().as_bytes()),
+    M.CBORValue.new_bytes(priv.to_public().to_raw_bytes()),
   ); // x (-2) set to public key
 
   return {
@@ -137,7 +137,7 @@ export function verifyData(
     }
   })();
 
-  const signature = C.Ed25519Signature.from_bytes(cose1.signature());
+  const signature = C.Ed25519Signature.from_raw_bytes(cose1.signature());
 
   const data = cose1.signed_data(undefined, undefined).to_bytes();
 

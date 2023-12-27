@@ -197,7 +197,7 @@ export class Tx {
             C.PartialPlutusWitness.new(
               //C.Script.new_plutus_v2(C.PlutusV2Script.from_cbor_hex(script.inlineScript))
               C.PlutusScriptWitness.from_script(script.inlineScript),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
             C.RequiredSigners.new(),
           );
@@ -205,7 +205,7 @@ export class Tx {
           mr = mintBuilder.plutus_script(
             C.PartialPlutusWitness.new(
               C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
-              C.PlutusData.from_bytes(fromHex(redeemer)),
+              C.PlutusData.from_cbor_hex(redeemer),
             ),
             C.RequiredSigners.new(),
           );
@@ -392,7 +392,7 @@ export class Tx {
         if ("inlineScript" in script) {
           cr = certBuilder.plutus_script(
             C.PartialPlutusWitness.new(
-              C.PlutusScriptWitness.from_script(script.inlineScript),
+              C.PlutusScriptWitness.from(script.inlineScript),
               C.PlutusData.from_cbor_hex(redeemer),
             ),
             C.RequiredSigners.new(),
@@ -620,12 +620,12 @@ export class Tx {
           );
         }
       } else {
-        if (rewAdd.payment_cred().kind() == 0) {
+        if (rewAdd.to_address().payment_cred()!.kind() == 0) {
           wr = certBuilder.payment_key();
         } else {
           let ns =
             this.native_scripts[
-              rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
+              rewAdd.to_address().payment_cred()!.as_script()!.to_hex()
             ];
           if (!ns) {
             throw "Script with no redeemer should be a nativescript, but none provided";
@@ -709,12 +709,7 @@ export class Tx {
       let md = C.Metadata.new()
       md.set(BigInt(label), C.TransactionMetadatum.new_text(JSON.stringify(metadata)))
       
-      let aux = C.AuxiliaryData.new();
-      aux.add_json_metadatum_with_schema(
-        BigInt(label),
-        JSON.stringify(metadata),
-        C.MetadataJsonSchema.BasicConversions,
-      );
+      let aux = C.AuxiliaryData.new_shelley(md);
       that.txBuilder.add_auxiliary_data(aux);
     });
     return this;
@@ -723,12 +718,10 @@ export class Tx {
   /* Same as above but MORE detailed! */
   attachMetadataWithDetailedConversion(label: Label, metadata: Json): Tx {
     this.tasks.push((that) => {
-      let aux = C.AuxiliaryData.new();
-      aux.add_json_metadatum_with_schema(
-        C.BigNum.from_str(label.toString()),
-        JSON.stringify(metadata),
-        C.MetadataJsonSchema.DetailedSchema,
-      );
+      let md = C.Metadata.new()
+      md.set(BigInt(label), C.TransactionMetadatum.new_text(JSON.stringify(metadata)))
+      
+      let aux = C.AuxiliaryData.new_shelley(md);
       that.txBuilder.add_auxiliary_data(aux);
     });
     return this;
@@ -919,6 +912,7 @@ export class Tx {
         draftTx = C.Transaction.new(
           draftTx.body(),
           witnessSet,
+          draftTx.is_valid(),
           draftTx.auxiliary_data(),
         );
       }
@@ -928,7 +922,7 @@ export class Tx {
       draftTxBytes,
       allUtxos.map((x) => x.input().to_bytes()),
       allUtxos.map((x) => x.output().to_bytes()),
-      costMdls.to_bytes(),
+      costMdls.to_cbor_bytes(),
       protocolParameters.maxTxExSteps,
       protocolParameters.maxTxExMem,
       BigInt(slotConfig.zeroTime),
@@ -987,16 +981,16 @@ async function createPoolRegistration(
     switch (relay.type) {
       case "SingleHostIp": {
         const ipV4 = relay.ipV4
-          ? C.Ipv4.new(
+          ? C.Ipv4.from_cbor_bytes(
               new Uint8Array(relay.ipV4.split(".").map((b) => parseInt(b))),
             )
           : undefined;
         const ipV6 = relay.ipV6
-          ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(":", "")))
+          ? C.Ipv6.from_cbor_hex(relay.ipV6.replaceAll(":", ""))
           : undefined;
         relays.add(
           C.Relay.new_single_host_addr(
-            C.SingleHostAddr.new(relay.port, ipV4, ipV6),
+            relay.port, ipV4, ipV6,
           ),
         );
         break;
@@ -1004,10 +998,8 @@ async function createPoolRegistration(
       case "SingleHostDomainName": {
         relays.add(
           C.Relay.new_single_host_name(
-            C.SingleHostName.new(
               relay.port,
-              C.DNSRecordAorAAAA.new(relay.domainName!),
-            ),
+              C.DnsName.from_cbor_hex(relay.domainName!),
           ),
         );
         break;
@@ -1015,7 +1007,7 @@ async function createPoolRegistration(
       case "MultiHost": {
         relays.add(
           C.Relay.new_multi_host_name(
-            C.MultiHostName.new(C.DNSRecordSRV.new(relay.domainName!)),
+            C.DnsName.from_cbor_hex(relay.domainName!),
           ),
         );
         break;

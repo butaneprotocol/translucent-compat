@@ -23,14 +23,14 @@ export class TxComplete {
     this.witnessSetBuilder = C.TransactionWitnessSetBuilder.new();
     this.tasks = [];
 
-    this.fee = parseInt(tx.body().fee().to_str());
+    this.fee = Number(tx.body().fee().valueOf());
     const redeemers = tx.witness_set().redeemers();
     if (redeemers) {
       const exUnits = { cpu: 0, mem: 0 };
       for (let i = 0; i < redeemers.len(); i++) {
         const redeemer = redeemers.get(i);
-        exUnits.cpu += parseInt(redeemer.ex_units().steps().to_str());
-        exUnits.mem += parseInt(redeemer.ex_units().mem().to_str());
+        exUnits.cpu += Number(redeemer.ex_units().steps().valueOf());
+        exUnits.mem += Number(redeemer.ex_units().mem().valueOf());
       }
       this.exUnits = exUnits;
     }
@@ -46,9 +46,9 @@ export class TxComplete {
   /** Add an extra signature from a private key. */
   signWithPrivateKey(privateKey: PrivateKey): TxComplete {
     const priv = C.PrivateKey.from_bech32(privateKey);
-    const witness = C.make_vkey_witness(
-      C.hash_transaction(this.txComplete.body()),
-      priv,
+    const witness = C.Vkeywitness.new(
+      priv.to_public(),
+      priv.sign(this.txComplete.body().to_cbor_bytes())
     );
     this.witnessSetBuilder.add_vkey(witness);
     return this;
@@ -58,7 +58,7 @@ export class TxComplete {
   async partialSign(): Promise<TransactionWitnesses> {
     const witnesses = await this.translucent.wallet.signTx(this.txComplete);
     this.witnessSetBuilder.add_existing(witnesses);
-    return toHex(witnesses.to_bytes());
+    return toHex(witnesses.to_cbor_bytes());
   }
 
   /**
@@ -67,21 +67,21 @@ export class TxComplete {
    */
   partialSignWithPrivateKey(privateKey: PrivateKey): TransactionWitnesses {
     const priv = C.PrivateKey.from_bech32(privateKey);
-    const witness = C.make_vkey_witness(
-      C.hash_transaction(this.txComplete.body()),
-      priv,
+    const witness = C.Vkeywitness.new(
+      priv.to_public(),
+      priv.sign(this.txComplete.body().to_cbor_bytes())
     );
     this.witnessSetBuilder.add_vkey(witness);
     const witnesses = C.TransactionWitnessSetBuilder.new();
     witnesses.add_vkey(witness);
-    return toHex(witnesses.build().to_bytes());
+    return toHex(witnesses.build().to_cbor_bytes());
   }
 
   /** Sign the transaction with the given witnesses. */
   assemble(witnesses: TransactionWitnesses[]): TxComplete {
     witnesses.forEach((witness) => {
-      const witnessParsed = C.TransactionWitnessSet.from_bytes(
-        fromHex(witness),
+      const witnessParsed = C.TransactionWitnessSet.from_cbor_hex(
+        witness
       );
       this.witnessSetBuilder.add_existing(witnessParsed);
     });
@@ -97,6 +97,7 @@ export class TxComplete {
     const signedTx = C.Transaction.new(
       this.txComplete.body(),
       this.witnessSetBuilder.build(),
+      this.txComplete.is_valid(),
       this.txComplete.auxiliary_data(),
     );
     return new TxSigned(this.translucent, signedTx);
@@ -104,7 +105,7 @@ export class TxComplete {
 
   /** Return the transaction in Hex encoded Cbor. */
   toString(): Transaction {
-    return toHex(this.txComplete.to_bytes());
+    return this.txComplete.to_cbor_hex();
   }
 
   /** Return the transaction hash. */

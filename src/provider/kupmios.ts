@@ -20,8 +20,6 @@ import {
   costModelKeys,
   fromHex,
   fromUnit,
-  toHex,
-  Utils,
 } from "../utils/mod.ts";
 import * as ogmios from "@cardano-ogmios/schema";
 

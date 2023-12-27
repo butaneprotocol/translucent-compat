@@ -271,18 +271,18 @@ function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
         return C.PlutusData.new_bytes(fromHex(data));
       } else if (data instanceof Constr) {
         const { index, fields } = data;
-        const plutusList = C.PlutusList.new();
+        const plutusList = C.PlutusDataList.new();
 
         fields.forEach((field) => plutusList.add(serialize(field)));
 
         return C.PlutusData.new_constr_plutus_data(
           C.ConstrPlutusData.new(
-            C.BigNum.from_str(index.toString()),
+            BigInt(index),
             plutusList,
           ),
         );
       } else if (data instanceof Array) {
-        const plutusList = C.PlutusList.new();
+        const plutusList = C.PlutusDataList.new();
 
         data.forEach((arg) => plutusList.add(serialize(arg)));
 
@@ -291,7 +291,7 @@ function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
         const plutusMap = C.PlutusMap.new();
 
         for (const [key, value] of data.entries()) {
-          plutusMap.insert(serialize(key), serialize(value));
+          plutusMap.set(serialize(key), serialize(value));
         }
 
         return C.PlutusData.new_map(plutusMap);
@@ -302,7 +302,7 @@ function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
     }
   }
   const d = type ? castTo<T>(data, type) : (data as Data);
-  return toHex(serialize(d).to_bytes()) as Datum | Redeemer;
+  return toHex(serialize(d).to_cbor_bytes()) as Datum | Redeemer;
 }
 
 /**
@@ -313,12 +313,12 @@ function from<T = Data>(raw: Datum | Redeemer, type?: T): T {
   function deserialize(data: C.PlutusData): Data {
     if (data.kind() === 0) {
       const constr = data.as_constr_plutus_data()!;
-      const l = constr.data();
+      const l = constr.fields();
       const desL = [];
       for (let i = 0; i < l.len(); i++) {
         desL.push(deserialize(l.get(i)));
       }
-      return new Constr(parseInt(constr.alternative().to_str()), desL);
+      return new Constr(parseInt(constr.alternative().toString()), desL);
     } else if (data.kind() === 1) {
       const m = data.as_map()!;
       const desM: Map<Data, Data> = new Map();
@@ -341,7 +341,7 @@ function from<T = Data>(raw: Datum | Redeemer, type?: T): T {
     }
     throw new Error("Unsupported type");
   }
-  const data = deserialize(C.PlutusData.from_bytes(fromHex(raw)));
+  const data = deserialize(C.PlutusData.from_cbor_hex(raw));
 
   return type ? castFrom<T>(data, type) : (data as T);
 }
