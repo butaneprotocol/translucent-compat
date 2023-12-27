@@ -1,4 +1,4 @@
-import { C } from '../core/mod.ts'
+import { C } from "../core/mod.ts";
 import {
   createCostModels,
   fromHex,
@@ -7,7 +7,7 @@ import {
   toUnit,
   Utils,
   utxoToCore,
-} from '../utils/mod.ts'
+} from "../utils/mod.ts";
 import {
   Address,
   Credential,
@@ -27,49 +27,49 @@ import {
   Unit,
   UTxO,
   WalletApi,
-} from '../types/mod.ts'
-import { Tx } from './tx.ts'
-import { TxComplete } from './tx_complete.ts'
-import { discoverOwnUsedTxKeyHashes, walletFromSeed } from '../misc/wallet.ts'
-import { signData, verifyData } from '../misc/sign_data.ts'
-import { Message } from './message.ts'
-import { SLOT_CONFIG_NETWORK } from '../plutus/time.ts'
-import { Constr, Data } from '../plutus/data.ts'
-import { Emulator } from '../provider/emulator.ts'
-import { toCore } from '../utils/to.ts'
-import { WalletConnector } from '../wallets/wallet_connector.ts'
-import { AbstractWallet } from '../wallets/abstract.ts'
-import { PrivateKeyWallet } from '../wallets/private_key.ts'
-import { SeedWallet } from '../wallets/seed.ts'
-import { ExternalWallet } from '../wallets/public_wallet.ts'
+} from "../types/mod.ts";
+import { Tx } from "./tx.ts";
+import { TxComplete } from "./tx_complete.ts";
+import { discoverOwnUsedTxKeyHashes, walletFromSeed } from "../misc/wallet.ts";
+import { signData, verifyData } from "../misc/sign_data.ts";
+import { Message } from "./message.ts";
+import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
+import { Constr, Data } from "../plutus/data.ts";
+import { Emulator } from "../provider/emulator.ts";
+import { toCore } from "../utils/to.ts";
+import { WalletConnector } from "../wallets/wallet_connector.ts";
+import { AbstractWallet } from "../wallets/abstract.ts";
+import { PrivateKeyWallet } from "../wallets/private_key.ts";
+import { SeedWallet } from "../wallets/seed.ts";
+import { ExternalWallet } from "../wallets/public_wallet.ts";
 
 export class Translucent {
-  txBuilderConfig!: C.TransactionBuilderConfig
-  wallet!: AbstractWallet
-  provider!: Provider
-  network: Network = 'Mainnet'
-  utils!: Utils
+  txBuilderConfig!: C.TransactionBuilderConfig;
+  wallet!: AbstractWallet;
+  provider!: Provider;
+  network: Network = "Mainnet";
+  utils!: Utils;
 
   static async new(
     provider?: Provider,
     network?: Network,
   ): Promise<Translucent> {
-    const translucent = new this()
-    if (network) translucent.network = network
+    const translucent = new this();
+    if (network) translucent.network = network;
     if (provider) {
-      translucent.provider = provider
-      const protocolParameters = await provider.getProtocolParameters()
+      translucent.provider = provider;
+      const protocolParameters = await provider.getProtocolParameters();
 
       if (translucent.provider instanceof Emulator) {
-        translucent.network = 'Custom'
+        translucent.network = "Custom";
         SLOT_CONFIG_NETWORK[translucent.network] = {
           zeroTime: translucent.provider.now(),
           zeroSlot: 0,
           slotLength: 1000,
-        }
+        };
       }
 
-      const slotConfig = SLOT_CONFIG_NETWORK[translucent.network]
+      const slotConfig = SLOT_CONFIG_NETWORK[translucent.network];
       translucent.txBuilderConfig = C.TransactionBuilderConfigBuilder.new()
         .coins_per_utxo_byte(
           C.BigNum.from_str(protocolParameters.coinsPerUtxoByte.toString()),
@@ -103,10 +103,10 @@ export class Translucent {
           ),
         )
         .costmdls(createCostModels(protocolParameters.costModels))
-        .build()
+        .build();
     }
-    translucent.utils = new Utils(translucent)
-    return translucent
+    translucent.utils = new Utils(translucent);
+    return translucent;
   }
 
   /**
@@ -117,28 +117,28 @@ export class Translucent {
     provider?: Provider,
     network?: Network,
   ): Promise<Translucent> {
-    if (this.network === 'Custom') {
-      throw new Error('Cannot switch when on custom network.')
+    if (this.network === "Custom") {
+      throw new Error("Cannot switch when on custom network.");
     }
-    const translucent = await Translucent.new(provider, network)
-    this.txBuilderConfig = translucent.txBuilderConfig
-    this.provider = provider || this.provider
-    this.network = network || this.network
-    this.wallet = translucent.wallet
-    return this
+    const translucent = await Translucent.new(provider, network);
+    this.txBuilderConfig = translucent.txBuilderConfig;
+    this.provider = provider || this.provider;
+    this.network = network || this.network;
+    this.wallet = translucent.wallet;
+    return this;
   }
 
   newTx(): Tx {
-    return new Tx(this)
+    return new Tx(this);
   }
 
   fromTx(tx: Transaction): TxComplete {
-    return new TxComplete(this, C.Transaction.from_bytes(fromHex(tx)))
+    return new TxComplete(this, C.Transaction.from_bytes(fromHex(tx)));
   }
 
   /** Signs a message. Expects the payload to be Hex encoded. */
   newMessage(address: Address | RewardAddress, payload: Payload): Message {
-    return new Message(this, address, payload)
+    return new Message(this, address, payload);
   }
 
   /** Verify a message. Expects the payload to be Hex encoded. */
@@ -151,99 +151,102 @@ export class Translucent {
       paymentCredential,
       stakeCredential,
       address: { hex: addressHex },
-    } = this.utils.getAddressDetails(address)
-    const keyHash = paymentCredential?.hash || stakeCredential?.hash
-    if (!keyHash) throw new Error('Not a valid address provided.')
+    } = this.utils.getAddressDetails(address);
+    const keyHash = paymentCredential?.hash || stakeCredential?.hash;
+    if (!keyHash) throw new Error("Not a valid address provided.");
 
-    return verifyData(addressHex, keyHash, payload, signedMessage)
+    return verifyData(addressHex, keyHash, payload, signedMessage);
   }
 
   currentSlot(): Slot {
-    return this.utils.unixTimeToSlot(Date.now())
+    return this.utils.unixTimeToSlot(Date.now());
   }
 
   utxosAt(addressOrCredential: Address | Credential): Promise<UTxO[]> {
-    return this.provider.getUtxos(addressOrCredential)
+    return this.provider.getUtxos(addressOrCredential);
   }
 
   utxosAtWithUnit(
     addressOrCredential: Address | Credential,
     unit: Unit,
   ): Promise<UTxO[]> {
-    return this.provider.getUtxosWithUnit(addressOrCredential, unit)
+    return this.provider.getUtxosWithUnit(addressOrCredential, unit);
   }
 
   /** Unit needs to be an NFT (or optionally the entire supply in one UTxO). */
   utxoByUnit(unit: Unit): Promise<UTxO> {
-    return this.provider.getUtxoByUnit(unit)
+    return this.provider.getUtxoByUnit(unit);
   }
 
   utxosByOutRef(outRefs: Array<OutRef>): Promise<UTxO[]> {
-    return this.provider.getUtxosByOutRef(outRefs)
+    return this.provider.getUtxosByOutRef(outRefs);
   }
 
   delegationAt(rewardAddress: RewardAddress): Promise<Delegation> {
-    return this.provider.getDelegation(rewardAddress)
+    return this.provider.getDelegation(rewardAddress);
   }
 
   awaitTx(txHash: TxHash, checkInterval = 3000): Promise<boolean> {
-    return this.provider.awaitTx(txHash, checkInterval)
+    return this.provider.awaitTx(txHash, checkInterval);
   }
 
   async datumOf<T = Data>(utxo: UTxO, type?: T): Promise<T> {
     if (!utxo.datum) {
       if (!utxo.datumHash) {
-        throw new Error('This UTxO does not have a datum hash.')
+        throw new Error("This UTxO does not have a datum hash.");
       }
-      utxo.datum = await this.provider.getDatum(utxo.datumHash)
+      utxo.datum = await this.provider.getDatum(utxo.datumHash);
     }
-    return Data.from<T>(utxo.datum, type)
+    return Data.from<T>(utxo.datum, type);
   }
 
   /** Query CIP-0068 metadata for a specifc asset. */
   async metadataOf<T = Json>(unit: Unit): Promise<T> {
-    const { policyId, name, label } = fromUnit(unit)
+    const { policyId, name, label } = fromUnit(unit);
     switch (label) {
       case 222:
       case 333:
       case 444: {
-        const utxo = await this.utxoByUnit(toUnit(policyId, name, 100))
-        const metadata = (await this.datumOf(utxo)) as Constr<Data>
-        return Data.toJson(metadata.fields[0])
+        const utxo = await this.utxoByUnit(toUnit(policyId, name, 100));
+        const metadata = (await this.datumOf(utxo)) as Constr<Data>;
+        return Data.toJson(metadata.fields[0]);
       }
       default:
-        throw new Error('No variant matched.')
+        throw new Error("No variant matched.");
     }
   }
 
-  
   selectWalletFromPrivateKey(privateKey: PrivateKey): Translucent {
-    return this.useWallet(new PrivateKeyWallet(this, privateKey))
+    return this.useWallet(new PrivateKeyWallet(this, privateKey));
   }
 
   selectWallet(api: WalletApi): Translucent {
-    return this.useWallet(new WalletConnector(this, api))
+    return this.useWallet(new WalletConnector(this, api));
   }
 
-  selectWalletFrom(address: Address,
+  selectWalletFrom(
+    address: Address,
     utxos?: UTxO[],
-    rewardAddress?: RewardAddress): Translucent {
-    return this.useWallet(new ExternalWallet(this, address, utxos, rewardAddress))
+    rewardAddress?: RewardAddress,
+  ): Translucent {
+    return this.useWallet(
+      new ExternalWallet(this, address, utxos, rewardAddress),
+    );
   }
 
   selectWalletFromSeed(
     seed: string,
     options?: {
-      addressType?: 'Base' | 'Enterprise'
-      accountIndex?: number
-      password?: string
+      addressType?: "Base" | "Enterprise";
+      accountIndex?: number;
+      password?: string;
     },
   ): Translucent {
-    return this.useWallet(new SeedWallet(this, seed, options))
+    return this.useWallet(new SeedWallet(this, seed, options));
   }
 
-  useWallet(wallet: AbstractWallet){
-    this.wallet = wallet
-    return this
+  useWallet(wallet: AbstractWallet) {
+    this.wallet = wallet;
+    return this;
   }
 }

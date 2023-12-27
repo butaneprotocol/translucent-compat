@@ -35,7 +35,7 @@ import {
   unixTimeToEnclosingSlot,
 } from "../plutus/time.ts";
 import { Data } from "../plutus/data.ts";
-import { toCore } from "./to"
+import { toCore } from "./to";
 
 export class Utils {
   private translucent: Translucent;

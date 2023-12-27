@@ -366,7 +366,7 @@ export class Tx {
       if (addressDetails.type !== "Reward" || !addressDetails.stakeCredential) {
         throw new Error("Not a reward address provided.");
       }
-      const credential = toCore.credential(addressDetails.stakeCredential)
+      const credential = toCore.credential(addressDetails.stakeCredential);
 
       let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_delegation(
@@ -429,7 +429,7 @@ export class Tx {
       if (addressDetails.type !== "Reward" || !addressDetails.stakeCredential) {
         throw new Error("Not a reward address provided.");
       }
-      const credential = toCore.credential(addressDetails.stakeCredential)
+      const credential = toCore.credential(addressDetails.stakeCredential);
 
       that.txBuilder.add_cert(
         C.SingleCertificateBuilder.new(
