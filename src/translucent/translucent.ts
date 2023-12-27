@@ -225,10 +225,6 @@ export class Translucent {
     return this.useWallet(new WalletConnector(this, api))
   }
 
-  /**
-   * Emulates a wallet by constructing it with the utxos and an address.
-   * If utxos are not set, utxos are fetched from the provided address.
-   */
   selectWalletFrom(address: Address,
     utxos?: UTxO[],
     rewardAddress?: RewardAddress): Translucent {
