@@ -36,12 +36,12 @@ export class ChainedWallet implements AbstractWallet {
     const inputs = txCore.body().inputs()
     const outputs = txCore.body().outputs()
     const toConsume: Record<string, boolean> = {}
-    for (let i=0; i<=inputs.len(); i++){
+    for (let i=0; i<inputs.len(); i++){
         const input = inputs.get(i);
         toConsume[input.transaction_id().to_hex() + input.index()] = true
     }
-    this.utxos = this.utxos.filter((utxo)=>toConsume[utxo.txHash+utxo.outputIndex.toString()]!=undefined)
-    for (let i=0; i<=outputs.len(); i++){
+    this.utxos = this.utxos.filter((utxo)=>toConsume[utxo.txHash+utxo.outputIndex.toString()]==true)
+    for (let i=0; i<outputs.len(); i++){
         const output = C.TransactionUnspentOutput.new(C.TransactionInput.new(hash, C.BigNum.from_str(i.toString())), outputs.get(i))
         const utxo = coreToUtxo(output);
         if (predicate(utxo)){
