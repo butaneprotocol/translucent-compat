@@ -159,31 +159,7 @@ export type Delegation = {
   rewards: Lovelace;
 };
 
-/**
- * A wallet that can be constructed from external data e.g utxos and an address.
- * It doesn't allow you to sign transactions/messages. This needs to be handled separately.
- */
-export interface ExternalWallet {
-  address: Address;
-  utxos?: UTxO[];
-  rewardAddress?: RewardAddress;
-}
-
 export type SignedMessage = { signature: string; key: string };
-
-export interface Wallet {
-  address(): Promise<Address>;
-  rewardAddress(): Promise<RewardAddress | null>;
-  getUtxos(): Promise<UTxO[]>;
-  getUtxosCore(): Promise<C.TransactionUnspentOutputs>;
-  getDelegation(): Promise<Delegation>;
-  signTx(tx: C.Transaction): Promise<C.TransactionWitnessSet>;
-  signMessage(
-    address: Address | RewardAddress,
-    payload: Payload,
-  ): Promise<SignedMessage>;
-  submitTx(signedTx: Transaction): Promise<TxHash>;
-}
 
 /** JSON object */
 // deno-lint-ignore no-explicit-any

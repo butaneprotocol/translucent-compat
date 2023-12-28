@@ -35,6 +35,8 @@ import {
   unixTimeToEnclosingSlot,
 } from "../plutus/time.ts";
 import { Data } from "../plutus/data.ts";
+import { toCore } from "./to";
+
 export class Utils {
   private translucent: Translucent;
   constructor(translucent: Translucent) {
@@ -50,13 +52,7 @@ export class Utils {
       return C.BaseAddress.new(
         networkToId(this.translucent.network),
         C.StakeCredential.from_scripthash(C.ScriptHash.from_hex(validatorHash)),
-        stakeCredential.type === "Key"
-          ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(stakeCredential.hash),
-            )
-          : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_hex(stakeCredential.hash),
-            ),
+        toCore.credential(stakeCredential),
       )
         .to_address()
         .to_bech32(undefined);

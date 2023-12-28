@@ -1,11 +1,9 @@
 import { C } from "../core/mod.ts";
 import {
-  coreToUtxo,
   createCostModels,
   fromHex,
   fromUnit,
   paymentCredentialOf,
-  toHex,
   toUnit,
   Utils,
   utxoToCore,
@@ -14,7 +12,6 @@ import {
   Address,
   Credential,
   Delegation,
-  ExternalWallet,
   Json,
   KeyHash,
   Network,
@@ -29,7 +26,6 @@ import {
   TxHash,
   Unit,
   UTxO,
-  Wallet,
   WalletApi,
 } from "../types/mod.ts";
 import { Tx } from "./tx.ts";
@@ -40,10 +36,16 @@ import { Message } from "./message.ts";
 import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
 import { Constr, Data } from "../plutus/data.ts";
 import { Emulator } from "../provider/emulator.ts";
+import { toCore } from "../utils/to.ts";
+import { WalletConnector } from "../wallets/wallet_connector.ts";
+import { AbstractWallet } from "../wallets/abstract.ts";
+import { PrivateKeyWallet } from "../wallets/private_key.ts";
+import { SeedWallet } from "../wallets/seed.ts";
+import { ExternalWallet } from "../wallets/public_wallet.ts";
 
 export class Translucent {
   txBuilderConfig!: C.TransactionBuilderConfig;
-  wallet!: Wallet;
+  wallet!: AbstractWallet;
   provider!: Provider;
   network: Network = "Mainnet";
   utils!: Utils;
@@ -214,226 +216,24 @@ export class Translucent {
     }
   }
 
-  /**
-   * Cardano Private key in bech32; not the BIP32 private key or any key that is not fully derived.
-   * Only an Enteprise address (without stake credential) is derived.
-   */
   selectWalletFromPrivateKey(privateKey: PrivateKey): Translucent {
-    const priv = C.PrivateKey.from_bech32(privateKey);
-    const pubKeyHash = priv.to_public().hash();
-
-    this.wallet = {
-      // deno-lint-ignore require-await
-      address: async (): Promise<Address> =>
-        C.EnterpriseAddress.new(
-          this.network === "Mainnet" ? 1 : 0,
-          C.StakeCredential.from_keyhash(pubKeyHash),
-        )
-          .to_address()
-          .to_bech32(undefined),
-      // deno-lint-ignore require-await
-      rewardAddress: async (): Promise<RewardAddress | null> => null,
-      getUtxos: async (): Promise<UTxO[]> => {
-        return await this.utxosAt(
-          paymentCredentialOf(await this.wallet.address()),
-        );
-      },
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const utxos = await this.utxosAt(
-          paymentCredentialOf(await this.wallet.address()),
-        );
-        const coreUtxos = C.TransactionUnspentOutputs.new();
-        utxos.forEach((utxo) => {
-          coreUtxos.add(utxoToCore(utxo));
-        });
-        return coreUtxos;
-      },
-      // deno-lint-ignore require-await
-      getDelegation: async (): Promise<Delegation> => {
-        return { poolId: null, rewards: 0n };
-      },
-      // deno-lint-ignore require-await
-      signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
-        const witness = C.make_vkey_witness(
-          C.hash_transaction(tx.body()),
-          priv,
-        );
-        const txWitnessSetBuilder = C.TransactionWitnessSetBuilder.new();
-        txWitnessSetBuilder.add_vkey(witness);
-        return txWitnessSetBuilder.build();
-      },
-      // deno-lint-ignore require-await
-      signMessage: async (
-        address: Address | RewardAddress,
-        payload: Payload,
-      ): Promise<SignedMessage> => {
-        const {
-          paymentCredential,
-          address: { hex: hexAddress },
-        } = this.utils.getAddressDetails(address);
-        const keyHash = paymentCredential?.hash;
-
-        const originalKeyHash = pubKeyHash.to_hex();
-
-        if (!keyHash || keyHash !== originalKeyHash) {
-          throw new Error(`Cannot sign message for address: ${address}.`);
-        }
-
-        return signData(hexAddress, payload, privateKey);
-      },
-      submitTx: async (tx: Transaction): Promise<TxHash> => {
-        return await this.provider.submitTx(tx);
-      },
-    };
-    return this;
+    return this.useWallet(new PrivateKeyWallet(this, privateKey));
   }
 
   selectWallet(api: WalletApi): Translucent {
-    const getAddressHex = async () => {
-      const [addressHex] = await api.getUsedAddresses();
-      if (addressHex) return addressHex;
-
-      const [unusedAddressHex] = await api.getUnusedAddresses();
-      return unusedAddressHex;
-    };
-
-    this.wallet = {
-      address: async (): Promise<Address> =>
-        C.Address.from_bytes(fromHex(await getAddressHex())).to_bech32(
-          undefined,
-        ),
-      rewardAddress: async (): Promise<RewardAddress | null> => {
-        const [rewardAddressHex] = await api.getRewardAddresses();
-        const rewardAddress = rewardAddressHex
-          ? C.RewardAddress.from_address(
-              C.Address.from_bytes(fromHex(rewardAddressHex)),
-            )!
-              .to_address()
-              .to_bech32(undefined)
-          : null;
-        return rewardAddress;
-      },
-      getUtxos: async (): Promise<UTxO[]> => {
-        const utxos = ((await api.getUtxos()) || []).map((utxo) => {
-          const parsedUtxo = C.TransactionUnspentOutput.from_bytes(
-            fromHex(utxo),
-          );
-          return coreToUtxo(parsedUtxo);
-        });
-        return utxos;
-      },
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const utxos = C.TransactionUnspentOutputs.new();
-        ((await api.getUtxos()) || []).forEach((utxo) => {
-          utxos.add(C.TransactionUnspentOutput.from_bytes(fromHex(utxo)));
-        });
-        return utxos;
-      },
-      getDelegation: async (): Promise<Delegation> => {
-        const rewardAddr = await this.wallet.rewardAddress();
-
-        return rewardAddr
-          ? await this.delegationAt(rewardAddr)
-          : { poolId: null, rewards: 0n };
-      },
-      signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
-        const witnessSet = await api.signTx(toHex(tx.to_bytes()), true);
-        return C.TransactionWitnessSet.from_bytes(fromHex(witnessSet));
-      },
-      signMessage: async (
-        address: Address | RewardAddress,
-        payload: Payload,
-      ): Promise<SignedMessage> => {
-        const hexAddress = toHex(C.Address.from_bech32(address).to_bytes());
-        return await api.signData(hexAddress, payload);
-      },
-      submitTx: async (tx: Transaction): Promise<TxHash> => {
-        const txHash = await api.submitTx(tx);
-        return txHash;
-      },
-    };
-    return this;
+    return this.useWallet(new WalletConnector(this, api));
   }
 
-  /**
-   * Emulates a wallet by constructing it with the utxos and an address.
-   * If utxos are not set, utxos are fetched from the provided address.
-   */
-  selectWalletFrom({
-    address,
-    utxos,
-    rewardAddress,
-  }: ExternalWallet): Translucent {
-    const addressDetails = this.utils.getAddressDetails(address);
-    this.wallet = {
-      // deno-lint-ignore require-await
-      address: async (): Promise<Address> => address,
-      // deno-lint-ignore require-await
-      rewardAddress: async (): Promise<RewardAddress | null> => {
-        const rewardAddr =
-          !rewardAddress && addressDetails.stakeCredential
-            ? (() => {
-                if (addressDetails.stakeCredential.type === "Key") {
-                  return C.RewardAddress.new(
-                    this.network === "Mainnet" ? 1 : 0,
-                    C.StakeCredential.from_keyhash(
-                      C.Ed25519KeyHash.from_hex(
-                        addressDetails.stakeCredential.hash,
-                      ),
-                    ),
-                  )
-                    .to_address()
-                    .to_bech32(undefined);
-                }
-                return C.RewardAddress.new(
-                  this.network === "Mainnet" ? 1 : 0,
-                  C.StakeCredential.from_scripthash(
-                    C.ScriptHash.from_hex(addressDetails.stakeCredential.hash),
-                  ),
-                )
-                  .to_address()
-                  .to_bech32(undefined);
-              })()
-            : rewardAddress;
-        return rewardAddr || null;
-      },
-      getUtxos: async (): Promise<UTxO[]> => {
-        return utxos ? utxos : await this.utxosAt(paymentCredentialOf(address));
-      },
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const coreUtxos = C.TransactionUnspentOutputs.new();
-        (utxos
-          ? utxos
-          : await this.utxosAt(paymentCredentialOf(address))
-        ).forEach((utxo) => coreUtxos.add(utxoToCore(utxo)));
-        return coreUtxos;
-      },
-      getDelegation: async (): Promise<Delegation> => {
-        const rewardAddr = await this.wallet.rewardAddress();
-
-        return rewardAddr
-          ? await this.delegationAt(rewardAddr)
-          : { poolId: null, rewards: 0n };
-      },
-      // deno-lint-ignore require-await
-      signTx: async (): Promise<C.TransactionWitnessSet> => {
-        throw new Error("Not implemented");
-      },
-      // deno-lint-ignore require-await
-      signMessage: async (): Promise<SignedMessage> => {
-        throw new Error("Not implemented");
-      },
-      submitTx: async (tx: Transaction): Promise<TxHash> => {
-        return await this.provider.submitTx(tx);
-      },
-    };
-    return this;
+  selectWalletFrom(
+    address: Address,
+    utxos?: UTxO[],
+    rewardAddress?: RewardAddress,
+  ): Translucent {
+    return this.useWallet(
+      new ExternalWallet(this, address, utxos, rewardAddress),
+    );
   }
 
-  /**
-   * Select wallet from a seed phrase (e.g. 15 or 24 words). You have the option to choose between a Base address (with stake credential)
-   * and Enterprise address (without stake credential). You can also decide which account index to derive. By default account 0 is derived.
-   */
   selectWalletFromSeed(
     seed: string,
     options?: {
@@ -442,98 +242,11 @@ export class Translucent {
       password?: string;
     },
   ): Translucent {
-    const { address, rewardAddress, paymentKey, stakeKey } = walletFromSeed(
-      seed,
-      {
-        addressType: options?.addressType || "Base",
-        accountIndex: options?.accountIndex || 0,
-        password: options?.password,
-        network: this.network,
-      },
-    );
+    return this.useWallet(new SeedWallet(this, seed, options));
+  }
 
-    const paymentKeyHash = C.PrivateKey.from_bech32(paymentKey)
-      .to_public()
-      .hash()
-      .to_hex();
-    const stakeKeyHash = stakeKey
-      ? C.PrivateKey.from_bech32(stakeKey).to_public().hash().to_hex()
-      : "";
-
-    const privKeyHashMap = {
-      [paymentKeyHash]: paymentKey,
-      [stakeKeyHash]: stakeKey,
-    };
-
-    this.wallet = {
-      // deno-lint-ignore require-await
-      address: async (): Promise<Address> => address,
-      // deno-lint-ignore require-await
-      rewardAddress: async (): Promise<RewardAddress | null> =>
-        rewardAddress || null,
-      // deno-lint-ignore require-await
-      getUtxos: async (): Promise<UTxO[]> =>
-        this.utxosAt(paymentCredentialOf(address)),
-      getUtxosCore: async (): Promise<C.TransactionUnspentOutputs> => {
-        const coreUtxos = C.TransactionUnspentOutputs.new();
-        (await this.utxosAt(paymentCredentialOf(address))).forEach((utxo) =>
-          coreUtxos.add(utxoToCore(utxo)),
-        );
-        return coreUtxos;
-      },
-      getDelegation: async (): Promise<Delegation> => {
-        const rewardAddr = await this.wallet.rewardAddress();
-
-        return rewardAddr
-          ? await this.delegationAt(rewardAddr)
-          : { poolId: null, rewards: 0n };
-      },
-      signTx: async (tx: C.Transaction): Promise<C.TransactionWitnessSet> => {
-        const utxos = await this.utxosAt(address);
-
-        const ownKeyHashes: Array<KeyHash> = [paymentKeyHash, stakeKeyHash];
-
-        const usedKeyHashes = discoverOwnUsedTxKeyHashes(
-          tx,
-          ownKeyHashes,
-          utxos,
-        );
-
-        const txWitnessSetBuilder = C.TransactionWitnessSetBuilder.new();
-        usedKeyHashes.forEach((keyHash) => {
-          const witness = C.make_vkey_witness(
-            C.hash_transaction(tx.body()),
-            C.PrivateKey.from_bech32(privKeyHashMap[keyHash]!),
-          );
-          txWitnessSetBuilder.add_vkey(witness);
-        });
-        return txWitnessSetBuilder.build();
-      },
-      // deno-lint-ignore require-await
-      signMessage: async (
-        address: Address | RewardAddress,
-        payload: Payload,
-      ): Promise<SignedMessage> => {
-        const {
-          paymentCredential,
-          stakeCredential,
-          address: { hex: hexAddress },
-        } = this.utils.getAddressDetails(address);
-
-        const keyHash = paymentCredential?.hash || stakeCredential?.hash;
-
-        const privateKey = privKeyHashMap[keyHash!];
-
-        if (!privateKey) {
-          throw new Error(`Cannot sign message for address: ${address}.`);
-        }
-
-        return signData(hexAddress, payload, privateKey);
-      },
-      submitTx: async (tx: Transaction): Promise<TxHash> => {
-        return await this.provider.submitTx(tx);
-      },
-    };
+  useWallet(wallet: AbstractWallet) {
+    this.wallet = wallet;
     return this;
   }
 }

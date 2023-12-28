@@ -36,6 +36,7 @@ import { applyDoubleCborEncoding } from "../utils/utils.ts";
 import { Translucent } from "./translucent.ts";
 import { TxComplete } from "./tx_complete.ts";
 import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
+import { toCore } from "../utils/to.ts";
 
 type ScriptOrRef =
   | { inlineScript: C.PlutusScript }
@@ -365,18 +366,7 @@ export class Tx {
       if (addressDetails.type !== "Reward" || !addressDetails.stakeCredential) {
         throw new Error("Not a reward address provided.");
       }
-      const credential =
-        addressDetails.stakeCredential.type === "Key"
-          ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            )
-          : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            );
+      const credential = toCore.credential(addressDetails.stakeCredential);
 
       let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_delegation(
@@ -439,18 +429,7 @@ export class Tx {
       if (addressDetails.type !== "Reward" || !addressDetails.stakeCredential) {
         throw new Error("Not a reward address provided.");
       }
-      const credential =
-        addressDetails.stakeCredential.type === "Key"
-          ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            )
-          : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            );
+      const credential = toCore.credential(addressDetails.stakeCredential);
 
       that.txBuilder.add_cert(
         C.SingleCertificateBuilder.new(
