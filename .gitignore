@@ -9,3 +9,4 @@ uplc/target
 .env
 .env.*
 seed.txt
+package-lock.json
