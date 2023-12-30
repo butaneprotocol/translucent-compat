@@ -787,6 +787,7 @@ export class Tx {
   async complete(options?: {
     change?: { address?: Address; outputData?: OutputData };
     coinSelection?: boolean;
+    overestimate?: number;
   }): Promise<TxComplete> {
     if (
       [
@@ -927,10 +928,24 @@ export class Tx {
     const redeemers = C.Redeemers.new()
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes);
+      const exUnits = C.ExUnits.new(
+        C.BigNum.from_str(
+          Math.floor(
+            parseInt(redeemer.ex_units().mem().to_str()) *
+            (options?.overestimate || 1),
+          ).toString(),
+        ),
+        C.BigNum.from_str(
+          Math.floor(
+            parseInt(redeemer.ex_units().steps().to_str()) *
+            (options?.overestimate || 1),
+          ).toString(),
+        ),
+      )
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
-        redeemer.ex_units(),
-      );
+        exUnits,
+      )
       redeemers.add(redeemer)
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked();
@@ -963,7 +978,7 @@ export class Tx {
       }
       const languages = C.Languages.new()
       languages.add(C.Language.new_plutus_v2())
-      const sdh = C.calc_script_data_hash(redeemers, datums, costMdls, languages)
+      const sdh = C.calc_script_data_hash(builtTx.witness_set().redeemers() || C.Redeemers.new(), datums, costMdls, languages)
       if (sdh){
         const bodyWithDataHash = builtTx.body()
         bodyWithDataHash.set_script_data_hash(sdh)
