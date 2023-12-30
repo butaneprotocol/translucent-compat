@@ -26,8 +26,8 @@
     "mathjs": "^12.2.1",
     "prettier": "^3.1.1",
     "sha256": "^0.2.0",
-    "uplc-node": "^0.0.1",
-    "uplc-web": "^0.0.1"
+    "uplc-node": "^0.0.2",
+    "uplc-web": "^0.0.2"
   },
   "browser": {
     "./core/core.ts": "./core/core-browser.ts"
