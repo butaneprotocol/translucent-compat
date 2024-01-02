@@ -978,11 +978,13 @@ export class Tx {
       }
       const languages = C.Languages.new()
       languages.add(C.Language.new_plutus_v2())
-      const sdh = C.calc_script_data_hash(builtTx.witness_set().redeemers() || C.Redeemers.new(), datums, costMdls, languages)
-      if (sdh){
-        const bodyWithDataHash = builtTx.body()
-        bodyWithDataHash.set_script_data_hash(sdh)
-        builtTx = C.Transaction.new(bodyWithDataHash, builtTx.witness_set(), builtTx.auxiliary_data())
+      if (builtTx.witness_set().redeemers()) {
+        const sdh = C.calc_script_data_hash(builtTx.witness_set().redeemers() || C.Redeemers.new(), datums, costMdls, languages)
+        if (sdh){
+          const bodyWithDataHash = builtTx.body()
+          bodyWithDataHash.set_script_data_hash(sdh)
+          builtTx = C.Transaction.new(bodyWithDataHash, builtTx.witness_set(), builtTx.auxiliary_data())
+        }
       }
     }
     return new TxComplete(this.translucent, builtTx);
