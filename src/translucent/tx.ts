@@ -246,7 +246,7 @@ export class Tx {
       let valueBuilder = outputBuilder.next();
       let assetsC = assetsToValue(assets);
       let params = this.translucent.provider
-        ? await this.translucent.provider.getProtocolParameters()
+        ? await this.translucent.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
       {
         let masset = assetsC.multiasset() || C.MultiAsset.new();
@@ -312,7 +312,7 @@ export class Tx {
       let valueBuilder = outputBuilder.next();
       let assetsC = assetsToValue(assets);
       let params = this.translucent.provider
-        ? await this.translucent.provider.getProtocolParameters()
+        ? await this.translucent.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
       {
         let masset = assetsC.multiasset() || C.MultiAsset.new();
@@ -862,7 +862,7 @@ export class Tx {
         );
         let amtBuilder = minCollateralOutput.next();
         let params = this.translucent.provider
-          ? await this.translucent.provider.getProtocolParameters()
+          ? await this.translucent.getProtocolParameters()
           : PROTOCOL_PARAMETERS_DEFAULT;
         let multiAsset = foundUtxo.output().amount().multiasset();
         amtBuilder = amtBuilder.with_asset_and_min_required_coin(
@@ -881,7 +881,7 @@ export class Tx {
     let protocolParameters: ProtocolParameters;
     try {
       protocolParameters =
-        await this.translucent.provider.getProtocolParameters();
+        await this.translucent.getProtocolParameters();
     } catch {
       protocolParameters = PROTOCOL_PARAMETERS_DEFAULT;
     }
@@ -979,7 +979,7 @@ export class Tx {
       const languages = C.Languages.new()
       languages.add(C.Language.new_plutus_v2())
       if (builtTx.witness_set().redeemers()) {
-        const sdh = C.calc_script_data_hash(builtTx.witness_set().redeemers() || C.Redeemers.new(), datums, costMdls, languages)
+        const sdh = C.calc_script_data_hash(builtTx.witness_set().redeemers()!, datums, costMdls, languages)
         if (sdh){
           const bodyWithDataHash = builtTx.body()
           bodyWithDataHash.set_script_data_hash(sdh)
