@@ -787,7 +787,8 @@ export class Tx {
   async complete(options?: {
     change?: { address?: Address; outputData?: OutputData };
     coinSelection?: boolean;
-    overestimate?: number;
+    overEstimateMem?: number;
+    overEstimateSteps?: number;
   }): Promise<TxComplete> {
     if (
       [
@@ -919,8 +920,8 @@ export class Tx {
       allUtxos.map((x) => x.input().to_bytes()),
       allUtxos.map((x) => x.output().to_bytes()),
       costMdls.to_bytes(),
-      BigInt(Math.floor(Number(protocolParameters.maxTxExSteps) / (options?.overestimate ?? 1))),
-      BigInt(Math.floor(Number(protocolParameters.maxTxExMem) / (options?.overestimate ?? 1))),
+      BigInt(Math.floor(Number(protocolParameters.maxTxExSteps) / (options?.overEstimateSteps ?? 1))),
+      BigInt(Math.floor(Number(protocolParameters.maxTxExMem) / (options?.overEstimateMem ?? 1))),
       BigInt(slotConfig.zeroTime),
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
@@ -932,13 +933,13 @@ export class Tx {
         C.BigNum.from_str(
           Math.floor(
             parseInt(redeemer.ex_units().mem().to_str()) *
-            (options?.overestimate ?? 1),
+            (options?.overEstimateMem ?? 1),
           ).toString(),
         ),
         C.BigNum.from_str(
           Math.floor(
             parseInt(redeemer.ex_units().steps().to_str()) *
-            (options?.overestimate ?? 1),
+            (options?.overEstimateSteps ?? 1),
           ).toString(),
         ),
       )
