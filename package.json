@@ -32,7 +32,7 @@
     "@dcspark/cardano-multiplatform-lib-nodejs": "@dcspark/cardano-multiplatform-lib-browser",
     "@emurgo/cardano-message-signing-nodejs": "@emurgo/cardano-message-signing-browser",
     "sha256": "tiny-sha256",
-    "uplc-node": "translucent/uplc/pkg-web"
+    "uplc-node": "uplc-web"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
