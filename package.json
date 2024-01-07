@@ -1,6 +1,7 @@
 {
   "name": "translucent-cardano",
   "module": "index.ts",
+  "main": "index.ts",
   "type": "module",
   "version": "0.0.2",
   "scripts": {
