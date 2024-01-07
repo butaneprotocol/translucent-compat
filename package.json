@@ -29,7 +29,10 @@
     "uplc-web": "^0.0.3"
   },
   "browser": {
-    "./core/core.ts": "./core/core-browser.ts"
+    "@dcspark/cardano-multiplatform-lib-nodejs": "@dcspark/cardano-multiplatform-lib-browser",
+    "@emurgo/cardano-message-signing-nodejs": "@emurgo/cardano-message-signing-browser",
+    "sha256": "tiny-sha256",
+    "uplc-node": "translucent/uplc/pkg-web"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
