@@ -1,7 +1,7 @@
 // This is a partial reimplementation of BIP39 in Deno: https://github.com/bitcoinjs/bip39
 // We only use the default Wordlist (english)
 import { toHex } from "../utils/mod.ts";
-import sha256 from "sha256";
+import sha256 from "tiny-sha256";
 
 const INVALID_MNEMONIC = "Invalid mnemonic";
 const INVALID_ENTROPY = "Invalid entropy";

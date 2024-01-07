@@ -24,14 +24,13 @@
     "@sinclair/typebox": "^0.31.28",
     "fast-check": "^3.14.0",
     "prettier": "^3.1.1",
-    "sha256": "^0.2.0",
+    "tiny-sha256": "^1.0.2",
     "uplc-node": "^0.0.3",
     "uplc-web": "^0.0.3"
   },
   "browser": {
     "@dcspark/cardano-multiplatform-lib-nodejs": "@dcspark/cardano-multiplatform-lib-browser",
     "@emurgo/cardano-message-signing-nodejs": "@emurgo/cardano-message-signing-browser",
-    "sha256": "tiny-sha256",
     "uplc-node": "uplc-web"
   },
   "peerDependencies": {
