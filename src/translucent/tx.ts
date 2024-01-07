@@ -924,50 +924,61 @@ export class Tx {
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
     );
-    const redeemers = C.Redeemers.new()
+    const redeemers = C.Redeemers.new();
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes);
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
         redeemer.ex_units(),
       );
-      redeemers.add(redeemer)
+      redeemers.add(redeemer);
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked();
     {
-      const datums = C.PlutusList.new()
-      const unhashedData = builtTx.witness_set().plutus_data()
-      let hashes = []
-      if (unhashedData){
-        for (let i=0; i<unhashedData.len(), i++;){
-          hashes.push(C.hash_plutus_data(unhashedData.get(i)).to_hex())
+      const datums = C.PlutusList.new();
+      const unhashedData = builtTx.witness_set().plutus_data();
+      let hashes = [];
+      if (unhashedData) {
+        for (let i = 0; i < unhashedData.len(), i++; ) {
+          hashes.push(C.hash_plutus_data(unhashedData.get(i)).to_hex());
         }
       }
-      for (let i=0; i<builtTx.body().inputs().len(), i++;) {
+      for (let i = 0; i < builtTx.body().inputs().len(), i++; ) {
         const input = builtTx.body().inputs().get(i);
-        const utxo = allUtxos.find((utxo)=>utxo.input().to_bytes()==input.to_bytes())
-        const datum = utxo?.output().datum()
-        if (datum){
-          const inline = datum.as_inline_data()
-          if (inline){
-            datums.add(inline)
-          }else{
+        const utxo = allUtxos.find(
+          (utxo) => utxo.input().to_bytes() == input.to_bytes(),
+        );
+        const datum = utxo?.output().datum();
+        if (datum) {
+          const inline = datum.as_inline_data();
+          if (inline) {
+            datums.add(inline);
+          } else {
             const hash = datum.as_data_hash();
-            if (hash){
-              const idx = hashes.indexOf(hash.to_hex())
-              const data = unhashedData?.get(idx)!
-              datums.add(data)
+            if (hash) {
+              const idx = hashes.indexOf(hash.to_hex());
+              const data = unhashedData?.get(idx)!;
+              datums.add(data);
             }
           }
         }
       }
-      const languages = C.Languages.new()
-      languages.add(C.Language.new_plutus_v2())
-      const sdh = C.calc_script_data_hash(redeemers, datums, costMdls, languages)
-      if (sdh){
-        const bodyWithDataHash = builtTx.body()
-        bodyWithDataHash.set_script_data_hash(sdh)
-        builtTx = C.Transaction.new(bodyWithDataHash, builtTx.witness_set(), builtTx.auxiliary_data())
+      const languages = C.Languages.new();
+      languages.add(C.Language.new_plutus_v2());
+      const sdh = C.calc_script_data_hash(
+        redeemers,
+        datums,
+        costMdls,
+        languages,
+      );
+      if (sdh) {
+        const bodyWithDataHash = builtTx.body();
+        bodyWithDataHash.set_script_data_hash(sdh);
+        builtTx = C.Transaction.new(
+          bodyWithDataHash,
+          builtTx.witness_set(),
+          builtTx.auxiliary_data(),
+        );
       }
     }
     return new TxComplete(this.translucent, builtTx);

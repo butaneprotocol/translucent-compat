@@ -263,12 +263,16 @@ export class KupmiosV5 implements Provider {
               } else if (language === "plutus:v1") {
                 return {
                   type: "PlutusV1",
-                  script: toHex(C.PlutusScript.new(fromHex(script)).to_bytes()),
+                  script: toHex(
+                    C.PlutusV1Script.new(fromHex(script)).to_bytes(),
+                  ),
                 };
               } else if (language === "plutus:v2") {
                 return {
                   type: "PlutusV2",
-                  script: toHex(C.PlutusScript.new(fromHex(script)).to_bytes()),
+                  script: toHex(
+                    C.PlutusV2Script.new(fromHex(script)).to_bytes(),
+                  ),
                 };
               }
             })()),

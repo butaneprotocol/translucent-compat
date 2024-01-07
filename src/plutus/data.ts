@@ -262,7 +262,11 @@ export const Data = {
  * Convert PlutusData to Cbor encoded data.\
  * Or apply a shape and convert the provided data struct to Cbor encoded data.
  */
-function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
+function to<T = Data>(
+  data: Exact<T>,
+  type?: T,
+  recType?: string,
+): Datum | Redeemer {
   function serialize(data: Data): C.PlutusData {
     try {
       if (typeof data === "bigint") {
@@ -301,7 +305,7 @@ function to<T = Data>(data: Exact<T>, type?: T): Datum | Redeemer {
       throw new Error("Could not serialize the data: " + error);
     }
   }
-  const d = type ? castTo<T>(data, type) : (data as Data);
+  const d = type ? castTo<T>(data, type, recType) : (data as Data);
   return toHex(serialize(d).to_bytes()) as Datum | Redeemer;
 }
 
@@ -618,11 +622,26 @@ function castFrom<T = Data>(data: Data, type: T): T {
   throw new Error("Could not type cast data.");
 }
 
-function castTo<T>(struct: Exact<T>, type: T): Data {
-  const shape = type as Json;
+function castTo<T>(
+  struct: Exact<T>,
+  type: T,
+  recType?: string,
+  recShape?: {
+    recType: string;
+    shape: T;
+    shapeType: string;
+  },
+): Data {
+  let shape = type as Json;
   if (!shape) throw new Error("Could not type cast struct.");
-  const shapeType = (shape.anyOf ? "enum" : "") || shape.dataType;
+  let shapeType = (shape.anyOf ? "enum" : "") || shape.dataType;
 
+  if (recType === shape.title) {
+    recShape = { recType: recType!, shape: shape, shapeType: shapeType };
+  } else if (recShape && shape.$ref) {
+    shape = recShape.shape;
+    shapeType = recShape.shapeType;
+  }
   switch (shapeType) {
     case "integer": {
       if (typeof struct !== "bigint") {
@@ -655,6 +674,8 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
         castTo<T>(
           (struct as Record<string, Json>)[field.title || "wrapper"],
           field,
+          recType,
+          recShape,
         ),
       );
       return shape.hasConstr || shape.hasConstr === undefined
@@ -664,7 +685,7 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
     case "enum": {
       // When enum has only one entry it's a single constructor/record object
       if (shape.anyOf.length === 1) {
-        return castTo<T>(struct, shape.anyOf[0]);
+        return castTo<T>(struct, shape.anyOf[0], recType, recShape);
       }
 
       if (isBoolean(shape)) {
@@ -679,7 +700,9 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
           if (fields.length !== 1) {
             throw new Error("Could not type cast to nullable object.");
           }
-          return new Constr(0, [castTo<T>(struct, fields[0])]);
+          return new Constr(0, [
+            castTo<T>(struct, fields[0], recType, recShape),
+          ]);
         }
       }
       switch (typeof struct) {
@@ -721,13 +744,13 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
             // check if named args
             args instanceof Array
               ? args.map((item, index) =>
-                  castTo<T>(item, enumEntry.fields[index]),
+                  castTo<T>(item, enumEntry.fields[index], recType, recShape),
                 )
               : enumEntry.fields.map((entry: Json) => {
                   const [_, item]: [string, Json] = Object.entries(args).find(
                     ([title]) => title === entry.title,
                   )!;
-                  return castTo<T>(item, entry);
+                  return castTo<T>(item, entry, recType, recShape);
                 }),
           );
         }
@@ -741,13 +764,15 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
       if (shape.items instanceof Array) {
         // tuple
         const fields = struct.map((item, index) =>
-          castTo<T>(item, shape.items[index]),
+          castTo<T>(item, shape.items[index], recType, recShape),
         );
         return shape.hasConstr ? new Constr(0, fields) : fields;
       } else {
         // array
         listConstraints(struct, shape);
-        return struct.map((item) => castTo<T>(item, shape.items));
+        return struct.map((item) =>
+          castTo<T>(item, shape.items, recType, recShape),
+        );
       }
     }
     case "map": {
@@ -759,7 +784,10 @@ function castTo<T>(struct: Exact<T>, type: T): Data {
 
       const map = new Map<Data, Data>();
       for (const [key, value] of struct.entries()) {
-        map.set(castTo<T>(key, shape.keys), castTo<T>(value, shape.values));
+        map.set(
+          castTo<T>(key, shape.keys, recType, recShape),
+          castTo<T>(value, shape.values, recType, recShape),
+        );
       }
       return map;
     }
