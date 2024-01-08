@@ -4,9 +4,6 @@
   "main": "index.ts",
   "type": "module",
   "version": "0.0.2",
-  "scripts": {
-    "build:wasm": "cd ./uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && npm i"
-  },
   "devDependencies": {
     "@types/jest": "^29.5.5",
     "@types/sha256": "^0.2.2",
