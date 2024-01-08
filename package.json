@@ -17,6 +17,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@aws-crypto/sha256-browser": "^5.2.0",
     "@dcspark/cardano-multiplatform-lib-browser": "^3.1.2",
     "@dcspark/cardano-multiplatform-lib-nodejs": "^3.1.2",
     "@emurgo/cardano-message-signing-browser": "^1.0.1",
@@ -24,7 +25,6 @@
     "@sinclair/typebox": "^0.31.28",
     "fast-check": "^3.14.0",
     "prettier": "^3.1.1",
-    "tiny-sha256": "^1.0.2",
     "uplc-node": "^0.0.3",
     "uplc-web": "^0.0.3"
   },
