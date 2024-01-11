@@ -33,7 +33,7 @@ import {
   toScriptRef,
   utxoToCore,
 } from "../utils/mod.ts";
-import { applyDoubleCborEncoding } from "../utils/utils.ts";
+import { applyDoubleCborEncoding, coreToUtxo } from "../utils/utils.ts";
 import { Translucent } from "./translucent.ts";
 import { TxComplete } from "./tx_complete.ts";
 import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
@@ -843,11 +843,12 @@ export class Tx {
     this.txBuilder.select_utxos(2);
 
     {
-      let foundUtxo = walletUTxOs.find(
+      let foundUtxo = utxoToCore(walletUTxOs.filter(
         (x) =>
           BigInt(x.output().amount().coin().to_str()) >=
-          BigInt(Math.pow(10, 7)),
-      );
+          BigInt(5*Math.pow(10, 6)),
+      ).map(coreToUtxo).sort((a,b)=>Number(a.assets.length - b.assets.length))[0]);
+      console.log("BEST COLLATERAL UTXO", coreToUtxo(foundUtxo))
       if (foundUtxo == undefined) {
         throw "Could not find a suitable collateral UTxO.";
       } else {
