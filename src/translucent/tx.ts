@@ -849,9 +849,9 @@ export class Tx {
       i+=1;
     }
     utxoAdaSearch.sort((x, y)=>x[1]-y[1])
-    console.log("Best ada amount: ", utxoAdaSearch[0][1])
+    console.log("Best ada amount: ", utxoAdaSearch[utxoAdaSearch.length][1])
     
-    const adaInput = walletUTxOs[utxoAdaSearch[0][0]]
+    const adaInput = walletUTxOs[utxoAdaSearch[utxoAdaSearch.length][0]]
     this.txBuilder.add_input(C.SingleInputBuilder.new(adaInput.input(), adaInput.output()).payment_key())
     this.txBuilder.select_utxos(2);
 
