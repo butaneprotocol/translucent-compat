@@ -835,11 +835,24 @@ export class Tx {
       options?.change?.address || (await this.translucent.wallet.address()),
       this.translucent,
     );
+
+
+    const utxoAdaSearch = []
+    let i = 0;
     for (const utxo of walletUTxOs) {
       this.txBuilder.add_utxo(
         C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
       );
+      
+      const minAda = C.min_ada_required(utxo.output(), C.BigNum.from_str((await this.translucent.provider.getProtocolParameters()).coinsPerUtxoByte.toString()))
+      utxoAdaSearch.push([i, parseFloat(utxo.output().amount().coin().to_str())-parseFloat(minAda.to_str())])
+      i+=1;
     }
+    utxoAdaSearch.sort((x, y)=>x[1]-y[1])
+    console.log("Best ada amount: ", utxoAdaSearch[0][1])
+    
+    const adaInput = walletUTxOs[utxoAdaSearch[0][0]]
+    this.txBuilder.add_input(C.SingleInputBuilder.new(adaInput.input(), adaInput.output()).payment_key())
     this.txBuilder.select_utxos(2);
 
     {
