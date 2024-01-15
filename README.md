@@ -67,7 +67,11 @@ optimizeDeps: {
 import { Maestro, Translucent } from "translucent-cardano";
 
 const translucent = await Translucent.new(
-  new Maestro({ network: "Mainnet", apiKey: "<apikey>" }),
+  new Maestro({
+    network: "Mainnet",
+    apiKey: "<apikey>",
+    turboSubmit: true
+  }),
   "Mainnet",
 );
 
