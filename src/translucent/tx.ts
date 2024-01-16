@@ -33,7 +33,7 @@ import {
   toScriptRef,
   utxoToCore,
 } from "../utils/mod.ts";
-import { applyDoubleCborEncoding } from "../utils/utils.ts";
+import { applyDoubleCborEncoding, coreToUtxo } from "../utils/utils.ts";
 import { Translucent } from "./translucent.ts";
 import { TxComplete } from "./tx_complete.ts";
 import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
@@ -246,7 +246,7 @@ export class Tx {
       let valueBuilder = outputBuilder.next();
       let assetsC = assetsToValue(assets);
       let params = this.translucent.provider
-        ? await this.translucent.provider.getProtocolParameters()
+        ? await this.translucent.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
       {
         let masset = assetsC.multiasset() || C.MultiAsset.new();
@@ -312,7 +312,7 @@ export class Tx {
       let valueBuilder = outputBuilder.next();
       let assetsC = assetsToValue(assets);
       let params = this.translucent.provider
-        ? await this.translucent.provider.getProtocolParameters()
+        ? await this.translucent.getProtocolParameters()
         : PROTOCOL_PARAMETERS_DEFAULT;
       {
         let masset = assetsC.multiasset() || C.MultiAsset.new();
@@ -787,6 +787,8 @@ export class Tx {
   async complete(options?: {
     change?: { address?: Address; outputData?: OutputData };
     coinSelection?: boolean;
+    overEstimateMem?: number;
+    overEstimateSteps?: number;
   }): Promise<TxComplete> {
     if (
       [
@@ -833,22 +835,33 @@ export class Tx {
       options?.change?.address || (await this.translucent.wallet.address()),
       this.translucent,
     );
-    for (const utxo of walletUTxOs) {
-      this.txBuilder.add_utxo(
-        C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
-      );
-    }
-    this.txBuilder.select_utxos(2);
 
+
+    const utxoAdaSearch = []
+    let i = 0;
+    for (const utxo of walletUTxOs) {      
+      const minAda = C.min_ada_required(utxo.output(), C.BigNum.from_str((await this.translucent.provider.getProtocolParameters()).coinsPerUtxoByte.toString()))
+      utxoAdaSearch.push([i, parseFloat(utxo.output().amount().coin().to_str())-parseFloat(minAda.to_str())])
+      i+=1;
+    }
+    utxoAdaSearch.sort((x, y)=>x[1]-y[1])
+    console.log("Best ada amount: ", utxoAdaSearch[utxoAdaSearch.length-1][1])
+    
+    const adaInput = walletUTxOs[utxoAdaSearch[utxoAdaSearch.length-1][0]]
+    this.txBuilder.add_input(C.SingleInputBuilder.new(adaInput.input(), adaInput.output()).payment_key())
+
+    let collateralInput: C.TransactionUnspentOutput
     {
-      let foundUtxo = walletUTxOs.find(
+      let foundUtxo = utxoToCore(walletUTxOs.filter(
         (x) =>
           BigInt(x.output().amount().coin().to_str()) >=
-          BigInt(Math.pow(10, 7)),
-      );
+          BigInt(5*Math.pow(10, 6)),
+      ).map(coreToUtxo).sort((a,b)=>Number(a.assets.length - b.assets.length))[0]);
+      console.log("BEST COLLATERAL UTXO", coreToUtxo(foundUtxo))
       if (foundUtxo == undefined) {
         throw "Could not find a suitable collateral UTxO.";
       } else {
+        collateralInput = foundUtxo
         let collateralUTxO = C.SingleInputBuilder.new(
           foundUtxo.input(),
           foundUtxo.output(),
@@ -861,7 +874,7 @@ export class Tx {
         );
         let amtBuilder = minCollateralOutput.next();
         let params = this.translucent.provider
-          ? await this.translucent.provider.getProtocolParameters()
+          ? await this.translucent.getProtocolParameters()
           : PROTOCOL_PARAMETERS_DEFAULT;
         let multiAsset = foundUtxo.output().amount().multiasset();
         amtBuilder = amtBuilder.with_asset_and_min_required_coin(
@@ -873,6 +886,16 @@ export class Tx {
         this.txBuilder.set_collateral_return(collateralReturn);
       }
     }
+
+    for (const utxo of walletUTxOs) {
+      if (utxo.to_bytes()!=adaInput.to_bytes() && utxo.to_bytes()!=collateralInput.to_bytes()){
+        this.txBuilder.add_utxo(
+          C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
+        );
+      };
+    };
+
+    this.txBuilder.select_utxos(2);
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
       0,
       changeAddress,
@@ -880,7 +903,7 @@ export class Tx {
     let protocolParameters: ProtocolParameters;
     try {
       protocolParameters =
-        await this.translucent.provider.getProtocolParameters();
+        await this.translucent.getProtocolParameters();
     } catch {
       protocolParameters = PROTOCOL_PARAMETERS_DEFAULT;
     }
@@ -918,8 +941,8 @@ export class Tx {
       allUtxos.map((x) => x.input().to_bytes()),
       allUtxos.map((x) => x.output().to_bytes()),
       costMdls.to_bytes(),
-      protocolParameters.maxTxExSteps,
-      protocolParameters.maxTxExMem,
+      BigInt(Math.floor(Number(protocolParameters.maxTxExSteps) / (options?.overEstimateSteps ?? 1))),
+      BigInt(Math.floor(Number(protocolParameters.maxTxExMem) / (options?.overEstimateMem ?? 1))),
       BigInt(slotConfig.zeroTime),
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
@@ -927,10 +950,24 @@ export class Tx {
     const redeemers = C.Redeemers.new()
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes);
+      const exUnits = C.ExUnits.new(
+        C.BigNum.from_str(
+          Math.floor(
+            parseInt(redeemer.ex_units().mem().to_str()) *
+            (options?.overEstimateMem ?? 1),
+          ).toString(),
+        ),
+        C.BigNum.from_str(
+          Math.floor(
+            parseInt(redeemer.ex_units().steps().to_str()) *
+            (options?.overEstimateSteps ?? 1),
+          ).toString(),
+        ),
+      )
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
-        redeemer.ex_units(),
-      );
+        exUnits,
+      )
       redeemers.add(redeemer)
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked();
@@ -963,11 +1000,13 @@ export class Tx {
       }
       const languages = C.Languages.new()
       languages.add(C.Language.new_plutus_v2())
-      const sdh = C.calc_script_data_hash(redeemers, datums, costMdls, languages)
-      if (sdh){
-        const bodyWithDataHash = builtTx.body()
-        bodyWithDataHash.set_script_data_hash(sdh)
-        builtTx = C.Transaction.new(bodyWithDataHash, builtTx.witness_set(), builtTx.auxiliary_data())
+      if (builtTx.witness_set().redeemers()) {
+        const sdh = C.calc_script_data_hash(builtTx.witness_set().redeemers()!, datums, costMdls, languages)
+        if (sdh){
+          const bodyWithDataHash = builtTx.body()
+          bodyWithDataHash.set_script_data_hash(sdh)
+          builtTx = C.Transaction.new(bodyWithDataHash, builtTx.witness_set(), builtTx.auxiliary_data())
+        }
       }
     }
     return new TxComplete(this.translucent, builtTx);

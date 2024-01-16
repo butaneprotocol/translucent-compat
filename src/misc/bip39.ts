@@ -1,7 +1,7 @@
 // This is a partial reimplementation of BIP39 in Deno: https://github.com/bitcoinjs/bip39
 // We only use the default Wordlist (english)
 import { toHex } from "../utils/mod.ts";
-import sha256 from "sha256";
+import {Sha256} from '@aws-crypto/sha256-browser'
 
 const INVALID_MNEMONIC = "Invalid mnemonic";
 const INVALID_ENTROPY = "Invalid entropy";
@@ -10,10 +10,10 @@ const WORDLIST_REQUIRED =
   "A wordlist is required but a default could not be found.\n" +
   "Please pass a 2048 word array explicitly.";
 
-export function mnemonicToEntropy(
+export async function mnemonicToEntropy(
   mnemonic: string,
   wordlist?: Array<string>,
-): string {
+): Promise<string> {
   wordlist = wordlist || DEFAULT_WORDLIST;
   if (!wordlist) {
     throw new Error(WORDLIST_REQUIRED);
@@ -48,7 +48,7 @@ export function mnemonicToEntropy(
     throw new Error(INVALID_ENTROPY);
   }
   const entropy = new Uint8Array(entropyBytes);
-  const newChecksum = deriveChecksumBits(entropy);
+  const newChecksum = await deriveChecksumBits(entropy);
   if (newChecksum !== checksumBits) {
     throw new Error(INVALID_CHECKSUM);
   }
@@ -83,24 +83,24 @@ function randomBytes(size: number): Uint8Array {
   return bytes;
 }
 
-export function generateMnemonic(
+export async function generateMnemonic(
   strength: number,
   rng?: (size: number) => Uint8Array,
   wordlist?: Array<string>,
-): string {
+): Promise<string> {
   strength = strength || 128;
   if (strength % 32 !== 0) {
     throw new TypeError(INVALID_ENTROPY);
   }
 
   rng = rng || randomBytes;
-  return entropyToMnemonic(rng(strength / 8), wordlist);
+  return await entropyToMnemonic(rng(strength / 8), wordlist);
 }
 
-function entropyToMnemonic(
+async function entropyToMnemonic(
   entropy: Uint8Array,
   wordlist?: Array<string>,
-): string {
+): Promise<string> {
   wordlist = wordlist || DEFAULT_WORDLIST;
   if (!wordlist) {
     throw new Error(WORDLIST_REQUIRED);
@@ -116,7 +116,7 @@ function entropyToMnemonic(
     throw new TypeError(INVALID_ENTROPY);
   }
   const entropyBits = bytesToBinary(Array.from(entropy));
-  const checksumBits = deriveChecksumBits(entropy);
+  const checksumBits = await deriveChecksumBits(entropy);
   const bits = entropyBits + checksumBits;
   const chunks = bits.match(/(.{1,11})/g);
   const words = chunks!.map((binary) => {
@@ -128,10 +128,14 @@ function entropyToMnemonic(
     : words.join(" ");
 }
 
-function deriveChecksumBits(entropyBuffer: Uint8Array): string {
+async function deriveChecksumBits(entropyBuffer: Uint8Array): Promise<string> {
   const ENT = entropyBuffer.length * 8;
   const CS = ENT / 32;
-  const hash = sha256(Array.from(entropyBuffer), { asBytes: true });
+  const hasher = new Sha256();
+  hasher.update(entropyBuffer);
+  const hash = await hasher.digest();
+
+  //const hash = sha256(Array.from(entropyBuffer), { asBytes: true });
   return bytesToBinary(Array.from(hash)).slice(0, CS);
 }
 
