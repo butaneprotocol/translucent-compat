@@ -849,14 +849,8 @@ export class Tx {
     
     const adaInput = walletUTxOs[utxoAdaSearch[utxoAdaSearch.length-1][0]]
     this.txBuilder.add_input(C.SingleInputBuilder.new(adaInput.input(), adaInput.output()).payment_key())
-    for (const utxo of walletUTxOs) {
-      if (utxo.to_bytes()!=adaInput.to_bytes()){
-        this.txBuilder.add_utxo(
-          C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
-        );
-      };
-    };
 
+    let collateralInput: C.TransactionUnspentOutput
     {
       let foundUtxo = utxoToCore(walletUTxOs.filter(
         (x) =>
@@ -867,6 +861,7 @@ export class Tx {
       if (foundUtxo == undefined) {
         throw "Could not find a suitable collateral UTxO.";
       } else {
+        collateralInput = foundUtxo
         let collateralUTxO = C.SingleInputBuilder.new(
           foundUtxo.input(),
           foundUtxo.output(),
@@ -891,6 +886,14 @@ export class Tx {
         this.txBuilder.set_collateral_return(collateralReturn);
       }
     }
+
+    for (const utxo of walletUTxOs) {
+      if (utxo.to_bytes()!=adaInput.to_bytes() && utxo.to_bytes()!=collateralInput.to_bytes()){
+        this.txBuilder.add_utxo(
+          C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
+        );
+      };
+    };
 
     this.txBuilder.select_utxos(2);
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
