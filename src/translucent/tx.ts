@@ -839,11 +839,7 @@ export class Tx {
 
     const utxoAdaSearch = []
     let i = 0;
-    for (const utxo of walletUTxOs) {
-      this.txBuilder.add_utxo(
-        C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
-      );
-      
+    for (const utxo of walletUTxOs) {      
       const minAda = C.min_ada_required(utxo.output(), C.BigNum.from_str((await this.translucent.provider.getProtocolParameters()).coinsPerUtxoByte.toString()))
       utxoAdaSearch.push([i, parseFloat(utxo.output().amount().coin().to_str())-parseFloat(minAda.to_str())])
       i+=1;
@@ -853,6 +849,13 @@ export class Tx {
     
     const adaInput = walletUTxOs[utxoAdaSearch[utxoAdaSearch.length-1][0]]
     this.txBuilder.add_input(C.SingleInputBuilder.new(adaInput.input(), adaInput.output()).payment_key())
+    for (const utxo of walletUTxOs) {
+      if (utxo.to_bytes()!=adaInput.to_bytes()){
+        this.txBuilder.add_utxo(
+          C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
+        );
+      };
+    };
     this.txBuilder.select_utxos(2);
 
     {
