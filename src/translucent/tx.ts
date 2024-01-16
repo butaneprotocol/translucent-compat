@@ -856,7 +856,6 @@ export class Tx {
         );
       };
     };
-    this.txBuilder.select_utxos(2);
 
     {
       let foundUtxo = utxoToCore(walletUTxOs.filter(
@@ -892,6 +891,8 @@ export class Tx {
         this.txBuilder.set_collateral_return(collateralReturn);
       }
     }
+
+    this.txBuilder.select_utxos(2);
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
       0,
       changeAddress,
