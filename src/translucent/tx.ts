@@ -159,7 +159,7 @@ function balance(collateralInput: C.TransactionUnspentOutput, availableInputs: C
         }
       }
       if (bestImprovement[2] == -1) {
-        throw new Error("Not enough coins to balance!")
+        throw new Error("UTxO Balance Insufficient (1)")
       }
       selectedInputs.add(bestImprovement[2])
       currentValue = assetAdd(currentValue, bestImprovement[1])
@@ -183,7 +183,7 @@ function balance(collateralInput: C.TransactionUnspentOutput, availableInputs: C
       }
     }
     if (bestImprovement[2] == -1) {
-      throw new Error("Not enough coins to balance (single)!")
+      throw new Error("UTxO Balance Insufficient (2)")
     }
     selectedInputs.add(bestImprovement[2])
     currentValue = assetAdd(currentValue, bestImprovement[1])
@@ -1026,12 +1026,15 @@ export class Tx {
 
 
     let rawOutputValue = this.txBuilder.get_explicit_output()
+    {
+      rawOutputValue = rawOutputValue.clamped_sub(collateralInput.output().amount())
+    }
     if (this.txBuilder.get_mint()){
       rawOutputValue = rawOutputValue.clamped_sub(C.Value.new_from_assets(this.txBuilder.get_mint()!.as_positive_multiasset()))
       rawOutputValue = rawOutputValue.checked_add(C.Value.new_from_assets(this.txBuilder.get_mint()!.as_negative_multiasset()))
     }
     {
-      rawOutputValue = rawOutputValue.clamped_sub(collateralInput.output().amount())
+      rawOutputValue = rawOutputValue.clamped_sub(this.txBuilder.get_explicit_input())
     }
     const outputValue = rawOutputValue.to_js_value()
     outputValue.coin = (BigInt(outputValue.coin)+(5n*(10n**6n))).toString()
