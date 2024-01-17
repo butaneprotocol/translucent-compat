@@ -43,6 +43,156 @@ type ScriptOrRef =
   | { inlineScript: C.PlutusScript }
   | { referenceScript: C.PlutusV2Script };
 
+function utxosEqual(a: C.TransactionUnspentOutput, b: C.TransactionUnspentOutput){
+  return a.input().transaction_id().to_hex() == b.input().transaction_id().to_hex()
+    && a.input().index().to_str() == b.input().index().to_str()
+}
+
+function valueJSToAssets(v: C.ValueJSON): Assets {
+  const assets: Assets = {}
+  assets.lovelace = BigInt(v.coin)
+  if (v.multiasset){
+    for (const policy of Object.keys(v.multiasset)){
+      for (const assetname of Object.keys(v.multiasset[policy])){
+        assets[policy + assetname] = BigInt(v.multiasset[policy][assetname])
+      }
+    }
+  }
+  return assets
+}
+
+function assetsToValueJS(v: Assets): C.ValueJSON {
+  const ret: C.ValueJSON = {coin: (v.lovelace || 0n).toString()}
+  for (const key of Object.keys(v)){
+    if (key!="lovelace"){
+      if (!ret.multiasset) {
+        ret.multiasset = {}
+      }
+      if (!ret.multiasset[key.slice(0,56)]) {
+        ret.multiasset[key.slice(0,56)] = {}
+      }
+      ret.multiasset[key.slice(0,56)][key.slice(56)] = v[key].toString()
+    }
+  }
+
+  return ret
+}
+
+function assetSub(a: Assets, b: Assets): Assets{
+  const ret: Assets = {}
+  for (const key of Object.keys(a)){
+    ret[key] = a[key]
+  }
+  for (const key of Object.keys(b)){
+    if (!ret[key]){
+      ret[key] = 0n
+    }
+    ret[key] -= b[key]
+  }
+  return ret
+}
+
+function assetAdd(a: Assets, b: Assets): Assets{
+  const ret: Assets = {}
+  for (const key of Object.keys(a)){
+    ret[key] = a[key]
+  }
+  for (const key of Object.keys(b)){
+    if (!(key in ret)){
+      ret[key] = 0n
+    }
+    ret[key] += b[key]
+  }
+  return ret
+}
+
+
+function assetPositives(assets: Assets){
+  const ret: Assets = {}
+  for (const key of Object.keys(assets)){
+    if (assets[key] > 0) {
+      ret[key] = assets[key]
+    }
+  }
+  return ret
+}
+
+function assetIntersect(a: Assets, b: Assets): number{
+  let ret = 0
+  for (const key of Object.keys(a)){
+    if (key in b){
+      ret+=1
+    }
+  }
+  return ret
+}
+
+function balance(collateralInput: C.TransactionUnspentOutput, availableInputs: C.TransactionUnspentOutput[], outputValue: C.ValueJSON): {selectedInputs: C.TransactionUnspentOutput[], excess: C.ValueJSON} {
+  let availableValues = availableInputs.map((x)=>valueJSToAssets(x.output().amount().to_js_value()))
+  let targetValue = valueJSToAssets(outputValue)
+  let currentValue = valueJSToAssets(C.Value.zero().to_js_value())
+  let selectedInputs = new Set([] as number[])
+  {
+    const collateralIdx = availableInputs.findIndex((x)=>x.input().to_json()==collateralInput.input().to_json())
+    if (collateralIdx>0){
+      selectedInputs.add(collateralIdx)
+      currentValue = assetAdd(currentValue, availableValues[collateralIdx])
+    }
+  }
+  
+  for (let j=0; j<30; j++){
+    let diff = assetSub(targetValue, currentValue)
+    let targetIncrease = assetPositives(diff)
+    if (Object.keys(targetIncrease).length <= 1){
+      break
+    }else{
+      let bestImprovement: [number, Assets, number] = [0, {}, -1]
+      for (let i = 0; i<availableValues.length; i+=1){
+        if (!selectedInputs.has(i)){
+          const potentialValue = availableValues[i]
+          const potentialImprovement = assetPositives(assetSub(targetIncrease, potentialValue))
+          const potentialIntersect = assetIntersect(targetIncrease, potentialValue)
+          const optVal = (Object.keys(targetIncrease).length - Object.keys(potentialImprovement).length) + (potentialIntersect/10)
+          if (optVal > bestImprovement[0]){
+            bestImprovement = [optVal, potentialValue, i]
+          }
+        }
+      }
+      if (bestImprovement[2] == -1) {
+        throw new Error("Not enough coins to balance!")
+      }
+      selectedInputs.add(bestImprovement[2])
+      currentValue = assetAdd(currentValue, bestImprovement[1])
+    }
+  }
+  for (let j=0; j<30; j++){
+    let diff = assetSub(targetValue, currentValue)
+    let targetIncrease = assetPositives(diff)
+    if (Object.keys(targetIncrease).length==0){
+      break
+    }
+    let searchAsset = Object.keys(targetIncrease)[0]
+
+    let bestImprovement: [bigint, Assets, number] = [0n, {}, -1]
+    for (let i = 0; i<availableValues.length; i+=1){
+      if (!selectedInputs.has(i)){
+        const potentialValue = availableValues[i]
+        if (potentialValue[searchAsset] > bestImprovement[0]) {
+          bestImprovement = [potentialValue[searchAsset], potentialValue, i]
+        }
+      }
+    }
+    if (bestImprovement[2] == -1) {
+      throw new Error("Not enough coins to balance (single)!")
+    }
+    selectedInputs.add(bestImprovement[2])
+    currentValue = assetAdd(currentValue, bestImprovement[1])
+  }
+  let finalInputs = [] as C.TransactionUnspentOutput[]
+  selectedInputs.forEach((x)=>finalInputs.push(availableInputs[x]))
+  return {selectedInputs: finalInputs, excess: assetsToValueJS(assetSub(currentValue, targetValue))}
+}
+
 export class Tx {
   txBuilder: C.TransactionBuilder;
 
@@ -837,19 +987,6 @@ export class Tx {
     );
 
 
-    const utxoAdaSearch = []
-    let i = 0;
-    for (const utxo of walletUTxOs) {      
-      const minAda = C.min_ada_required(utxo.output(), C.BigNum.from_str((await this.translucent.provider.getProtocolParameters()).coinsPerUtxoByte.toString()))
-      utxoAdaSearch.push([i, parseFloat(utxo.output().amount().coin().to_str())-parseFloat(minAda.to_str())])
-      i+=1;
-    }
-    utxoAdaSearch.sort((x, y)=>x[1]-y[1])
-    console.log("Best ada amount: ", utxoAdaSearch[utxoAdaSearch.length-1][1])
-    
-    const adaInput = walletUTxOs[utxoAdaSearch[utxoAdaSearch.length-1][0]]
-    this.txBuilder.add_input(C.SingleInputBuilder.new(adaInput.input(), adaInput.output()).payment_key())
-
     let collateralInput: C.TransactionUnspentOutput
     {
       let foundUtxo = utxoToCore(walletUTxOs.filter(
@@ -887,15 +1024,22 @@ export class Tx {
       }
     }
 
-    for (const utxo of walletUTxOs) {
-      if (utxo.to_bytes()!=adaInput.to_bytes() && utxo.to_bytes()!=collateralInput.to_bytes()){
-        this.txBuilder.add_utxo(
-          C.SingleInputBuilder.new(utxo.input(), utxo.output()).payment_key(),
-        );
-      };
-    };
 
-    this.txBuilder.select_utxos(2);
+    let rawOutputValue = this.txBuilder.get_explicit_output()
+    if (this.txBuilder.get_mint()){
+      rawOutputValue = rawOutputValue.clamped_sub(C.Value.new_from_assets(this.txBuilder.get_mint()!.as_positive_multiasset()))
+      rawOutputValue = rawOutputValue.checked_add(C.Value.new_from_assets(this.txBuilder.get_mint()!.as_negative_multiasset()))
+    }
+    {
+      rawOutputValue = rawOutputValue.clamped_sub(collateralInput.output().amount())
+    }
+    const outputValue = rawOutputValue.to_js_value()
+    outputValue.coin = (BigInt(outputValue.coin)+(5n*(10n**6n))).toString()
+    const {selectedInputs, excess} = balance(collateralInput, walletUTxOs, outputValue)
+    
+    for (const inp of selectedInputs){
+      this.txBuilder.add_input(C.SingleInputBuilder.new(inp.input(), inp.output()).payment_key())
+    }
     let txRedeemerBuilder = this.txBuilder.build_for_evaluation(
       0,
       changeAddress,
