@@ -114,7 +114,9 @@ export class Maestro implements Provider {
     });
     const result: MaestroUtxos = await this.getAllPagesData(
       async (qry: string) =>
-        await fetch(qry, { headers: this.commonHeaders() }),
+        await fetch(qry, {
+          headers: this.requireAmountsAsStrings(this.commonHeaders()),
+        }),
       `${this.url}${queryPredicate}/utxos`,
       qparams,
       "Location: getUtxosInternal. Error: Could not fetch UTxOs from Maestro",
@@ -182,7 +184,7 @@ export class Maestro implements Provider {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...this.commonHeaders(),
+            ...(this.requireAmountsAsStrings(this.commonHeaders())),
           },
           body: body,
         }),
@@ -211,7 +213,7 @@ export class Maestro implements Provider {
 
   async getDatum(datumHash: DatumHash): Promise<Datum> {
     const timestampedResultResponse = await fetch(
-      `${this.url}/datum/${datumHash}`,
+      `${this.url}/datums/${datumHash}`,
       {
         headers: this.commonHeaders(),
       },
@@ -276,6 +278,10 @@ export class Maestro implements Provider {
 
   private commonHeaders() {
     return { "api-key": this.apiKey, translucent: packageJson.version };
+  }
+
+  private requireAmountsAsStrings(obj: { "api-key": string; translucent: string }) {
+    return { ...obj, "amounts-as-strings": "true" };
   }
 
   private maestroUtxoToUtxo(result: MaestroUtxo): UTxO {
@@ -356,7 +362,7 @@ type MaestroScript = {
 
 type MaestroAsset = {
   unit: string;
-  amount: number;
+  amount: string;
 };
 
 type MaestroUtxo = {
