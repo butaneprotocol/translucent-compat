@@ -989,12 +989,13 @@ export class Tx {
 
     let collateralInput: C.TransactionUnspentOutput
     {
-      let foundUtxo = utxoToCore(walletUTxOs.filter(
+      let foundUtxoLucid = walletUTxOs.filter(
         (x) =>
           BigInt(x.output().amount().coin().to_str()) >=
           BigInt(5*Math.pow(10, 6)),
-      ).map(coreToUtxo).sort((a,b)=>Number(a.assets.length - b.assets.length))[0]);
-      console.log("BEST COLLATERAL UTXO", coreToUtxo(foundUtxo))
+      ).map(coreToUtxo).sort((a,b)=>Number(a.assets.length - b.assets.length))[0]
+      let foundUtxo = foundUtxoLucid ? utxoToCore(foundUtxoLucid) : undefined;
+      console.log("BEST COLLATERAL UTXO", foundUtxoLucid)
       if (foundUtxo == undefined) {
         throw "Could not find a suitable collateral UTxO.";
       } else {
