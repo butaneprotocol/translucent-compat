@@ -995,7 +995,7 @@ export class Tx {
           BigInt(5*Math.pow(10, 6)),
       ).map(coreToUtxo).sort((a,b)=>Number(a.assets.length - b.assets.length))[0]
       let foundUtxo = foundUtxoLucid ? utxoToCore(foundUtxoLucid) : undefined;
-      console.log("BEST COLLATERAL UTXO", foundUtxoLucid)
+      //console.log("BEST COLLATERAL UTXO", foundUtxoLucid)
       if (foundUtxo == undefined) {
         throw "Could not find a suitable collateral UTxO.";
       } else {
