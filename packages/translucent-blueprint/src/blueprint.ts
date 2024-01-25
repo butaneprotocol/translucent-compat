@@ -276,5 +276,3 @@ import { applyParamsToScript, Data, Validator } from "../translucent/index.ts"`;
     );
   }
 }
-
-parseBlueprint("../../../on-chain/aiken/plutus.json", "plutus.ts");

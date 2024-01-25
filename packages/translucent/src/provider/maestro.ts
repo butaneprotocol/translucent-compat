@@ -184,7 +184,7 @@ export class Maestro implements Provider {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(this.requireAmountsAsStrings(this.commonHeaders())),
+            ...this.requireAmountsAsStrings(this.commonHeaders()),
           },
           body: body,
         }),
@@ -280,7 +280,10 @@ export class Maestro implements Provider {
     return { "api-key": this.apiKey, translucent: packageJson.version };
   }
 
-  private requireAmountsAsStrings(obj: { "api-key": string; translucent: string }) {
+  private requireAmountsAsStrings(obj: {
+    "api-key": string;
+    translucent: string;
+  }) {
     return { ...obj, "amounts-as-strings": "true" };
   }
 
