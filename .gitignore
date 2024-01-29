@@ -10,3 +10,4 @@ uplc/target
 .env.*
 seed.txt
 package-lock.json
+.vscode/

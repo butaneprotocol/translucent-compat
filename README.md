@@ -70,7 +70,7 @@ const translucent = await Translucent.new(
   new Maestro({
     network: "Mainnet",
     apiKey: "<apikey>",
-    turboSubmit: true
+    turboSubmit: true,
   }),
   "Mainnet",
 );

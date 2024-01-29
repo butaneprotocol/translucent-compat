@@ -1,0 +1,9 @@
+{
+  "name": "translucent-blueprint",
+  "module": "index.ts",
+  "bin": {
+    "translucent-blueprint": "cli.ts"
+  },
+  "type": "module",
+  "version": "0.0.2"
+}
