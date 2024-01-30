@@ -131,6 +131,11 @@ function entropyToMnemonic(
 function deriveChecksumBits(entropyBuffer: Uint8Array): string {
   const ENT = entropyBuffer.length * 8;
   const CS = ENT / 32;
+  
+ // const hasher =  new Bun.CryptoHasher('sha256')
+ // hasher.update(entropyBuffer, 'hex')
+ // const hash = hasher.digest()  as Uint8Array
+
   const hash = sha256(Array.from(entropyBuffer), { asBytes: true });
   return bytesToBinary(Array.from(hash)).slice(0, CS);
 }

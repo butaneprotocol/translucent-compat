@@ -43,6 +43,156 @@ type ScriptOrRef =
   | { inlineScript: C.PlutusScript }
   | { referenceScript: C.PlutusV2Script };
 
+function utxosEqual(a: C.TransactionUnspentOutput, b: C.TransactionUnspentOutput){
+  return a.input().transaction_id().to_hex() == b.input().transaction_id().to_hex()
+    && a.input().index().to_str() == b.input().index().to_str()
+}
+
+function valueJSToAssets(v: C.ValueJSON): Assets {
+  const assets: Assets = {}
+  assets.lovelace = BigInt(v.coin)
+  if (v.multiasset){
+    for (const policy of Object.keys(v.multiasset)){
+      for (const assetname of Object.keys(v.multiasset[policy])){
+        assets[policy + assetname] = BigInt(v.multiasset[policy][assetname])
+      }
+    }
+  }
+  return assets
+}
+
+function assetsToValueJS(v: Assets): C.ValueJSON {
+  const ret: C.ValueJSON = {coin: (v.lovelace || 0n).toString()}
+  for (const key of Object.keys(v)){
+    if (key!="lovelace"){
+      if (!ret.multiasset) {
+        ret.multiasset = {}
+      }
+      if (!ret.multiasset[key.slice(0,56)]) {
+        ret.multiasset[key.slice(0,56)] = {}
+      }
+      ret.multiasset[key.slice(0,56)][key.slice(56)] = v[key].toString()
+    }
+  }
+
+  return ret
+}
+
+function assetSub(a: Assets, b: Assets): Assets{
+  const ret: Assets = {}
+  for (const key of Object.keys(a)){
+    ret[key] = a[key]
+  }
+  for (const key of Object.keys(b)){
+    if (!ret[key]){
+      ret[key] = 0n
+    }
+    ret[key] -= b[key]
+  }
+  return ret
+}
+
+function assetAdd(a: Assets, b: Assets): Assets{
+  const ret: Assets = {}
+  for (const key of Object.keys(a)){
+    ret[key] = a[key]
+  }
+  for (const key of Object.keys(b)){
+    if (!(key in ret)){
+      ret[key] = 0n
+    }
+    ret[key] += b[key]
+  }
+  return ret
+}
+
+
+function assetPositives(assets: Assets){
+  const ret: Assets = {}
+  for (const key of Object.keys(assets)){
+    if (assets[key] > 0) {
+      ret[key] = assets[key]
+    }
+  }
+  return ret
+}
+
+function assetIntersect(a: Assets, b: Assets): number{
+  let ret = 0
+  for (const key of Object.keys(a)){
+    if (key in b){
+      ret+=1
+    }
+  }
+  return ret
+}
+
+function balance(collateralInput: C.TransactionUnspentOutput, availableInputs: C.TransactionUnspentOutput[], outputValue: C.ValueJSON): {selectedInputs: C.TransactionUnspentOutput[], excess: C.ValueJSON} {
+  let availableValues = availableInputs.map((x)=>valueJSToAssets(x.output().amount().to_js_value()))
+  let targetValue = valueJSToAssets(outputValue)
+  let currentValue = valueJSToAssets(C.Value.zero().to_js_value())
+  let selectedInputs = new Set([] as number[])
+  {
+    const collateralIdx = availableInputs.findIndex((x)=>x.input().to_json()==collateralInput.input().to_json())
+    if (collateralIdx>0){
+      selectedInputs.add(collateralIdx)
+      currentValue = assetAdd(currentValue, availableValues[collateralIdx])
+    }
+  }
+
+  for (let j=0; j<30; j++){
+    let diff = assetSub(targetValue, currentValue)
+    let targetIncrease = assetPositives(diff)
+    if (Object.keys(targetIncrease).length <= 1){
+      break
+    }else{
+      let bestImprovement: [number, Assets, number] = [0, {}, -1]
+      for (let i = 0; i<availableValues.length; i+=1){
+        if (!selectedInputs.has(i)){
+          const potentialValue = availableValues[i]
+          const potentialImprovement = assetPositives(assetSub(targetIncrease, potentialValue))
+          const potentialIntersect = assetIntersect(targetIncrease, potentialValue)
+          const optVal = (Object.keys(targetIncrease).length - Object.keys(potentialImprovement).length) + (potentialIntersect/10)
+          if (optVal > bestImprovement[0]){
+            bestImprovement = [optVal, potentialValue, i]
+          }
+        }
+      }
+      if (bestImprovement[2] == -1) {
+        throw new Error("UTxO Balance Insufficient (1)")
+      }
+      selectedInputs.add(bestImprovement[2])
+      currentValue = assetAdd(currentValue, bestImprovement[1])
+    }
+  }
+  for (let j=0; j<30; j++){
+    let diff = assetSub(targetValue, currentValue)
+    let targetIncrease = assetPositives(diff)
+    if (Object.keys(targetIncrease).length==0){
+      break
+    }
+    let searchAsset = Object.keys(targetIncrease)[0]
+
+    let bestImprovement: [bigint, Assets, number] = [0n, {}, -1]
+    for (let i = 0; i<availableValues.length; i+=1){
+      if (!selectedInputs.has(i)){
+        const potentialValue = availableValues[i]
+        if (potentialValue[searchAsset] > bestImprovement[0]) {
+          bestImprovement = [potentialValue[searchAsset], potentialValue, i]
+        }
+      }
+    }
+    if (bestImprovement[2] == -1) {
+      throw new Error("UTxO Balance Insufficient (2)")
+    }
+    selectedInputs.add(bestImprovement[2])
+    currentValue = assetAdd(currentValue, bestImprovement[1])
+  }
+  let finalInputs = [] as C.TransactionUnspentOutput[]
+  selectedInputs.forEach((x)=>finalInputs.push(availableInputs[x]))
+  return {selectedInputs: finalInputs, excess: assetsToValueJS(assetSub(currentValue, targetValue))}
+}
+
 export class Tx {
   txBuilder: C.TransactionBuilder;
 
@@ -455,15 +605,15 @@ export class Tx {
       const credential =
         addressDetails.stakeCredential.type === "Key"
           ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            )
+            C.Ed25519KeyHash.from_bytes(
+              fromHex(addressDetails.stakeCredential.hash),
+            ),
+          )
           : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            );
+            C.ScriptHash.from_bytes(
+              fromHex(addressDetails.stakeCredential.hash),
+            ),
+          );
 
       let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_deregistration(
@@ -603,7 +753,7 @@ export class Tx {
         } else {
           let ns =
             this.native_scripts[
-              rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
+            rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
             ];
           if (!ns) {
             throw "Script with no redeemer should be a nativescript, but none provided";
@@ -787,6 +937,8 @@ export class Tx {
   async complete(options?: {
     change?: { address?: Address; outputData?: OutputData };
     coinSelection?: boolean;
+    overEstimateMem?: number;
+    overEstimateSteps?: number;
   }): Promise<TxComplete> {
     if (
       [
@@ -918,67 +1070,72 @@ export class Tx {
       allUtxos.map((x) => x.input().to_bytes()),
       allUtxos.map((x) => x.output().to_bytes()),
       costMdls.to_bytes(),
-      protocolParameters.maxTxExSteps,
-      protocolParameters.maxTxExMem,
+      BigInt(Math.floor(Number(protocolParameters.maxTxExSteps) / (options?.overEstimateSteps ?? 1))),
+      BigInt(Math.floor(Number(protocolParameters.maxTxExMem) / (options?.overEstimateMem ?? 1))),
       BigInt(slotConfig.zeroTime),
       BigInt(slotConfig.zeroSlot),
       slotConfig.slotLength,
     );
-    const redeemers = C.Redeemers.new();
+    const redeemers = C.Redeemers.new()
     for (const redeemerBytes of uplcResults) {
       let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes);
+      const exUnits = C.ExUnits.new(
+        C.BigNum.from_str(
+          Math.floor(
+            parseInt(redeemer.ex_units().mem().to_str()) *
+            (options?.overEstimateMem ?? 1),
+          ).toString(),
+        ),
+        C.BigNum.from_str(
+          Math.floor(
+            parseInt(redeemer.ex_units().steps().to_str()) *
+            (options?.overEstimateSteps ?? 1),
+          ).toString(),
+        ),
+      )
       this.txBuilder.set_exunits(
         C.RedeemerWitnessKey.new(redeemer.tag(), redeemer.index()),
-        redeemer.ex_units(),
+        // TODO: redeemer.ex_units(),
+        exUnits
+
       );
-      redeemers.add(redeemer);
+      redeemers.add(redeemer)
     }
     let builtTx = this.txBuilder.build(0, changeAddress).build_unchecked();
     {
-      const datums = C.PlutusList.new();
-      const unhashedData = builtTx.witness_set().plutus_data();
-      let hashes = [];
+      const datums = C.PlutusList.new()
+      const unhashedData = builtTx.witness_set().plutus_data()
+      let hashes: string[] = []
       if (unhashedData) {
-        for (let i = 0; i < unhashedData.len(), i++; ) {
-          hashes.push(C.hash_plutus_data(unhashedData.get(i)).to_hex());
+        for (let i = 0; i < unhashedData.len(), i++;) {
+          hashes.push(C.hash_plutus_data(unhashedData.get(i)).to_hex())
         }
       }
-      for (let i = 0; i < builtTx.body().inputs().len(), i++; ) {
+      for (let i = 0; i < builtTx.body().inputs().len(), i++;) {
         const input = builtTx.body().inputs().get(i);
-        const utxo = allUtxos.find(
-          (utxo) => utxo.input().to_bytes() == input.to_bytes(),
-        );
-        const datum = utxo?.output().datum();
+        const utxo = allUtxos.find((utxo) => utxo.input().to_bytes() == input.to_bytes())
+        const datum = utxo?.output().datum()
         if (datum) {
-          const inline = datum.as_inline_data();
+          const inline = datum.as_inline_data()
           if (inline) {
-            datums.add(inline);
+            datums.add(inline)
           } else {
             const hash = datum.as_data_hash();
             if (hash) {
-              const idx = hashes.indexOf(hash.to_hex());
-              const data = unhashedData?.get(idx)!;
-              datums.add(data);
+              const idx = hashes.indexOf(hash.to_hex())
+              const data = unhashedData?.get(idx)!
+              datums.add(data)
             }
           }
         }
       }
-      const languages = C.Languages.new();
-      languages.add(C.Language.new_plutus_v2());
-      const sdh = C.calc_script_data_hash(
-        redeemers,
-        datums,
-        costMdls,
-        languages,
-      );
+      const languages = C.Languages.new()
+      languages.add(C.Language.new_plutus_v2())
+      const sdh = C.calc_script_data_hash(redeemers, datums, costMdls, languages)
       if (sdh) {
-        const bodyWithDataHash = builtTx.body();
-        bodyWithDataHash.set_script_data_hash(sdh);
-        builtTx = C.Transaction.new(
-          bodyWithDataHash,
-          builtTx.witness_set(),
-          builtTx.auxiliary_data(),
-        );
+        const bodyWithDataHash = builtTx.body()
+        bodyWithDataHash.set_script_data_hash(sdh)
+        builtTx = C.Transaction.new(bodyWithDataHash, builtTx.witness_set(), builtTx.auxiliary_data())
       }
     }
     return new TxComplete(this.translucent, builtTx);
@@ -1009,8 +1166,8 @@ async function createPoolRegistration(
 
   const metadataHash = metadata
     ? C.PoolMetadata.from_bytes(
-        Buffer.from(new Uint8Array(metadata)),
-      ).pool_metadata_hash()
+      Buffer.from(new Uint8Array(metadata)),
+    ).pool_metadata_hash()
     : null;
 
   const relays = C.Relays.new();
@@ -1019,8 +1176,8 @@ async function createPoolRegistration(
       case "SingleHostIp": {
         const ipV4 = relay.ipV4
           ? C.Ipv4.new(
-              new Uint8Array(relay.ipV4.split(".").map((b) => parseInt(b))),
-            )
+            new Uint8Array(relay.ipV4.split(".").map((b) => parseInt(b))),
+          )
           : undefined;
         const ipV6 = relay.ipV6
           ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(":", "")))

@@ -18,6 +18,7 @@ import {
   OutRef,
   Payload,
   PrivateKey,
+  ProtocolParameters,
   Provider,
   RewardAddress,
   SignedMessage,
@@ -47,6 +48,7 @@ export class Translucent {
   txBuilderConfig!: C.TransactionBuilderConfig;
   wallet!: AbstractWallet;
   provider!: Provider;
+  protocolParams: ProtocolParameters | null = null
   network: Network = "Mainnet";
   utils!: Utils;
 
@@ -107,6 +109,13 @@ export class Translucent {
     }
     translucent.utils = new Utils(translucent);
     return translucent;
+  }
+
+  async getProtocolParameters(): Promise<ProtocolParameters> {
+    if (this.protocolParams === null) {
+      this.protocolParams = await this.provider.getProtocolParameters();
+    }
+    return this.protocolParams;
   }
 
   /**

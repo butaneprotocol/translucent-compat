@@ -17,7 +17,7 @@ import {
 } from "../types/mod.ts";
 import { C } from "../core/mod.ts";
 import { costModelKeys, fromUnit } from "../utils/mod.ts";
-import * as ogmios from "@cardano-ogmios/schema";
+import * as ogmios from "./ogmios.ts";
 
 function fromMaybeBuffer(x: string | Buffer) {
   if (typeof x === "string") {
