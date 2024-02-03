@@ -2,7 +2,10 @@
   "name": "translucent-blueprint",
   "module": "index.ts",
   "bin": {
-    "translucent-blueprint": "cli.ts"
+    "translucent-blueprint": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc --project ./tsconfig.json --outDir ./dist"
   },
   "type": "module",
   "version": "0.0.1"
