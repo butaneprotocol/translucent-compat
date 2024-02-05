@@ -2,7 +2,7 @@
   "name": "translucent-cardano",
   "module": "index.ts",
   "type": "module",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "scripts": {
     "build:wasm": "cd ./uplc && ./build.sh && rm pkg-node/.gitignore && rm pkg-web/.gitignore && cd .. && npm i"
   },
