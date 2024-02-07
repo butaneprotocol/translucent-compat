@@ -33,7 +33,7 @@ import {
   toScriptRef,
   utxoToCore,
 } from "../utils/mod.ts";
-import { applyDoubleCborEncoding, coreToUtxo } from "../utils/utils.ts";
+import { applyDoubleCborEncoding, coreToUtxo, toHex } from "../utils/utils.ts";
 import { Translucent } from "./translucent.ts";
 import { TxComplete } from "./tx_complete.ts";
 import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
@@ -193,6 +193,66 @@ function balance(collateralInput: C.TransactionUnspentOutput, availableInputs: C
   return {selectedInputs: finalInputs, excess: assetsToValueJS(assetSub(currentValue, targetValue))}
 }
 
+function txCollectFrom(txBuilder: C.TransactionBuilder, scripts: Record<string, ScriptOrRef>, native_scripts: Record<string, C.NativeScript>, coreUtxo: C.TransactionUnspentOutput, redeemer?: string) {
+  let inputBuilder = C.SingleInputBuilder.new(
+    coreUtxo.input(),
+    coreUtxo.output(),
+  );
+  let mr: C.InputBuilderResult;
+  let address = coreUtxo.output().address();
+  let paymentCredential = address.payment_cred();
+  if (redeemer && paymentCredential?.to_scripthash()) {
+    let paymentCredential = address.payment_cred();
+    if (!paymentCredential) {
+      throw "Address has no payment credential";
+    }
+    if (!paymentCredential.to_scripthash()) {
+      throw "Address isn't a scripthash but has a redeemer";
+    }
+    let scriptHash = paymentCredential.to_scripthash()!.to_hex();
+    let script = scripts[scriptHash];
+    if (!script) {
+      throw "Script was not attached for UTxO spend";
+    }
+    let datum = coreUtxo.output().datum()?.as_inline_data();
+    if ("inlineScript" in script) {
+      mr = inputBuilder.plutus_script(
+        C.PartialPlutusWitness.new(
+          C.PlutusScriptWitness.from_script(script.inlineScript),
+          C.PlutusData.from_bytes(fromHex(redeemer)),
+        ),
+        C.Ed25519KeyHashes.new(),
+        datum!,
+      );
+    } else {
+      mr = inputBuilder.plutus_script(
+        C.PartialPlutusWitness.new(
+          C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
+          C.PlutusData.from_bytes(fromHex(redeemer)),
+        ),
+        C.Ed25519KeyHashes.new(),
+        datum!,
+      );
+    }
+  } else {
+    let payCred = coreUtxo.output().address().payment_cred();
+    if (payCred?.kind() == 0) {
+      mr = inputBuilder.payment_key();
+    } else {
+      let scriptHash = payCred?.to_scripthash()?.to_hex().toString()!;
+      let ns = native_scripts[scriptHash];
+      if (!ns) {
+        throw "No native script was found for your mint without redeemer!";
+      }
+      mr = inputBuilder.native_script(
+        ns,
+        C.NativeScriptWitnessInfo.assume_signature_count(),
+      );
+    }
+  }
+  txBuilder.add_input(mr);
+}
+
 export class Tx {
   txBuilder: C.TransactionBuilder;
 
@@ -203,6 +263,7 @@ export class Tx {
   private earlyTasks: ((that: Tx) => unknown)[];
   private translucent: Translucent;
 
+  private spendRedeemers: Record<string, string> = {}
   private UTxOs: C.TransactionUnspentOutput[] = [];
   private referencedUTxOs: C.TransactionUnspentOutput[] = [];
 
@@ -258,63 +319,9 @@ export class Tx {
         }
         const coreUtxo = utxoToCore(utxo);
         this.UTxOs.push(coreUtxo);
-        let inputBuilder = C.SingleInputBuilder.new(
-          coreUtxo.input(),
-          coreUtxo.output(),
-        );
-        let mr: C.InputBuilderResult;
-        let address = coreUtxo.output().address();
-        let paymentCredential = address.payment_cred();
-        if (redeemer && paymentCredential?.to_scripthash()) {
-          let paymentCredential = address.payment_cred();
-          if (!paymentCredential) {
-            throw "Address has no payment credential";
-          }
-          if (!paymentCredential.to_scripthash()) {
-            throw "Address isn't a scripthash but has a redeemer";
-          }
-          let scriptHash = paymentCredential.to_scripthash()!.to_hex();
-          let script = this.scripts[scriptHash];
-          if (!script) {
-            throw "Script was not attached for UTxO spend";
-          }
-          let datum = coreUtxo.output().datum()?.as_inline_data();
-          if ("inlineScript" in script) {
-            mr = inputBuilder.plutus_script(
-              C.PartialPlutusWitness.new(
-                C.PlutusScriptWitness.from_script(script.inlineScript),
-                C.PlutusData.from_bytes(fromHex(redeemer)),
-              ),
-              C.Ed25519KeyHashes.new(),
-              datum!,
-            );
-          } else {
-            mr = inputBuilder.plutus_script(
-              C.PartialPlutusWitness.new(
-                C.PlutusScriptWitness.from_ref(script.referenceScript.hash()),
-                C.PlutusData.from_bytes(fromHex(redeemer)),
-              ),
-              C.Ed25519KeyHashes.new(),
-              datum!,
-            );
-          }
-        } else {
-          let payCred = coreUtxo.output().address().payment_cred();
-          if (payCred?.kind() == 0) {
-            mr = inputBuilder.payment_key();
-          } else {
-            let scriptHash = payCred?.to_scripthash()?.to_hex().toString()!;
-            let ns = this.native_scripts[scriptHash];
-            if (!ns) {
-              throw "No native script was found for your mint without redeemer!";
-            }
-            mr = inputBuilder.native_script(
-              ns,
-              C.NativeScriptWitnessInfo.assume_signature_count(),
-            );
-          }
+        if (redeemer){
+          this.spendRedeemers[toHex(coreUtxo.input().to_bytes())] = redeemer
         }
-        that.txBuilder.add_input(mr);
       }
     });
     return this;
@@ -1022,6 +1029,11 @@ export class Tx {
         const collateralReturn = amtBuilder.build().output();
         this.txBuilder.add_collateral(collateralUTxO);
         this.txBuilder.set_collateral_return(collateralReturn);
+      }
+    }
+    for (const utxo of this.UTxOs){
+      if (utxo.input().to_bytes() != collateralInput.input().to_bytes()){
+        txCollectFrom(this.txBuilder, this.scripts, this.native_scripts, utxo, this.spendRedeemers[toHex(utxo.input().to_bytes())])
       }
     }
 
