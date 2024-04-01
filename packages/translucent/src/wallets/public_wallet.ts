@@ -1,16 +1,18 @@
 import {
   C,
-  UTxO,
+  type UTxO,
   paymentCredentialOf,
   utxoToCore,
-  Delegation,
-  TxHash,
-  Address,
-  RewardAddress,
-  Transaction,
-  SignedMessage,
+  type Delegation,
+  type TxHash,
+  type Address,
+  type RewardAddress,
+  type Transaction,
+  type SignedMessage,
   Translucent,
-  AddressDetails,
+  type AddressDetails,
+  CTransactionWitnessSet,
+  CTransactionUnspentOutputs,
 } from "../mod";
 import { toCore } from "../utils/to";
 import { AbstractWallet } from "./abstract";
@@ -51,12 +53,12 @@ export class ExternalWallet implements AbstractWallet {
     const rewardAddr =
       !this.walletDetails.rewardAddress && this.addressDetails.stakeCredential
         ? (() =>
-            C.RewardAddress.new(
-              this.translucent.network === "Mainnet" ? 1 : 0,
-              toCore.credential(this.addressDetails.stakeCredential),
-            )
-              .to_address()
-              .to_bech32(undefined))()
+          C.RewardAddress.new(
+            this.translucent.network === "Mainnet" ? 1 : 0,
+            toCore.credential(this.addressDetails.stakeCredential),
+          )
+            .to_address()
+            .to_bech32(undefined))()
         : this.walletDetails.rewardAddress;
     return rewardAddr || null;
   }
@@ -64,16 +66,16 @@ export class ExternalWallet implements AbstractWallet {
     return this.walletDetails.utxos
       ? this.walletDetails.utxos
       : await this.translucent.utxosAt(
-          paymentCredentialOf(this.walletDetails.address),
-        );
+        paymentCredentialOf(this.walletDetails.address),
+      );
   }
-  async getUtxosCore(): Promise<C.TransactionUnspentOutputs> {
+  async getUtxosCore(): Promise<CTransactionUnspentOutputs> {
     const coreUtxos = C.TransactionUnspentOutputs.new();
     (this.walletDetails.utxos
       ? this.walletDetails.utxos
       : await this.translucent.utxosAt(
-          paymentCredentialOf(this.walletDetails.address),
-        )
+        paymentCredentialOf(this.walletDetails.address),
+      )
     ).forEach((utxo) => coreUtxos.add(utxoToCore(utxo)));
     return coreUtxos;
   }
@@ -84,7 +86,7 @@ export class ExternalWallet implements AbstractWallet {
       ? await this.translucent.delegationAt(rewardAddr)
       : { poolId: null, rewards: 0n };
   }
-  async signTx(): Promise<C.TransactionWitnessSet> {
+  async signTx(): Promise<CTransactionWitnessSet> {
     throw new Error("Not implemented");
   }
   async signMessage(): Promise<SignedMessage> {

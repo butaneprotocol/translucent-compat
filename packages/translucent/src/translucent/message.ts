@@ -1,13 +1,13 @@
-import { Translucent } from "./mod.ts";
-import {
+import { Translucent } from "./mod";
+import type {
   Address,
   Payload,
   PrivateKey,
   RewardAddress,
   SignedMessage,
 } from "../types/mod.ts";
-import { signData } from "../misc/sign_data.ts";
-import { C } from "../mod.ts";
+import { signData } from "../misc/sign_data";
+import { C } from "../mod";
 
 export class Message {
   translucent: Translucent;

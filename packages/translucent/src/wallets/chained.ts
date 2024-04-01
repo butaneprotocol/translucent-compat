@@ -1,17 +1,20 @@
 import {
-  UTxO,
+  type UTxO,
   C,
-  Delegation,
-  Payload,
-  TxHash,
-  SignedMessage,
-  Address,
-  RewardAddress,
-  Transaction,
+  type Delegation,
+  type Payload,
+  type TxHash,
+  type SignedMessage,
+  type Address,
+  type RewardAddress,
+  type Transaction,
   Translucent,
   utxoToCore,
   fromHex,
   coreToUtxo,
+  CTransaction,
+  CTransactionWitnessSet,
+  CTransactionUnspentOutputs,
 } from "../mod";
 import { AbstractWallet } from "./abstract";
 
@@ -67,7 +70,7 @@ export class ChainedWallet implements AbstractWallet {
     return Promise.resolve(this.utxos);
   }
 
-  getUtxosCore(): Promise<C.TransactionUnspentOutputs> {
+  getUtxosCore(): Promise<CTransactionUnspentOutputs> {
     const outputs = C.TransactionUnspentOutputs.new();
     const utxos = this.utxos.map(utxoToCore);
     for (const utxo of utxos) {
@@ -80,7 +83,7 @@ export class ChainedWallet implements AbstractWallet {
     return this.wallet.getDelegation();
   }
 
-  signTx(tx: C.Transaction): Promise<C.TransactionWitnessSet> {
+  signTx(tx: CTransaction): Promise<CTransactionWitnessSet> {
     return this.wallet.signTx(tx);
   }
 

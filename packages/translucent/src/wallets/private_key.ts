@@ -1,19 +1,23 @@
 import { signData } from "../misc/sign_data";
 import {
-  SignedMessage,
-  PrivateKey,
-  Address,
-  RewardAddress,
-  Transaction,
+  type SignedMessage,
+  type PrivateKey,
+  type Address,
+  type RewardAddress,
+  type Transaction,
   Translucent,
-  WalletApi,
   C,
-  UTxO,
+  type UTxO,
   paymentCredentialOf,
   utxoToCore,
-  Delegation,
-  Payload,
-  TxHash,
+  type Delegation,
+  type Payload,
+  type TxHash,
+  CTransactionUnspentOutputs,
+  CTransactionWitnessSet,
+  CTransaction,
+  CPrivateKey,
+  CEd25519KeyHash,
 } from "../mod";
 import { AbstractWallet } from "./abstract";
 
@@ -24,8 +28,8 @@ import { AbstractWallet } from "./abstract";
 export class PrivateKeyWallet implements AbstractWallet {
   translucent: Translucent;
   private privateKey: PrivateKey;
-  private priv: C.PrivateKey;
-  pubKeyHash: C.Ed25519KeyHash;
+  private priv: CPrivateKey;
+  pubKeyHash: CEd25519KeyHash;
 
   constructor(translucent: Translucent, privateKey: PrivateKey) {
     this.translucent = translucent;
@@ -51,7 +55,7 @@ export class PrivateKeyWallet implements AbstractWallet {
       paymentCredentialOf(await this.address()),
     );
   }
-  async getUtxosCore(): Promise<C.TransactionUnspentOutputs> {
+  async getUtxosCore(): Promise<CTransactionUnspentOutputs> {
     const utxos = await this.translucent.utxosAt(
       paymentCredentialOf(await this.address()),
     );
@@ -66,7 +70,7 @@ export class PrivateKeyWallet implements AbstractWallet {
     return { poolId: null, rewards: 0n };
   }
   // deno-lint-ignore require-await
-  async signTx(tx: C.Transaction): Promise<C.TransactionWitnessSet> {
+  async signTx(tx: CTransaction): Promise<CTransactionWitnessSet> {
     const witness = C.make_vkey_witness(
       C.hash_transaction(tx.body()),
       this.priv,

@@ -1,19 +1,22 @@
 import { signData } from "../misc/sign_data";
 import { discoverOwnUsedTxKeyHashes, walletFromSeed } from "../misc/wallet";
 import {
-  Address,
+  type Address,
   C,
-  Delegation,
-  KeyHash,
-  Payload,
-  RewardAddress,
-  SignedMessage,
-  Transaction,
+  type Delegation,
+  type KeyHash,
+  type Payload,
+  type RewardAddress,
+  type SignedMessage,
+  type Transaction,
   Translucent,
-  TxHash,
-  UTxO,
+  type TxHash,
+  type UTxO,
   paymentCredentialOf,
   utxoToCore,
+  CTransaction,
+  CTransactionWitnessSet,
+  CTransactionUnspentOutputs,
 } from "../mod";
 import { AbstractWallet } from "./abstract";
 
@@ -25,8 +28,6 @@ export class SeedWallet implements AbstractWallet {
   translucent: Translucent;
   private address_: string;
   private rewardAddress_: string | null;
-  private paymentKey: string;
-  private stakeKey: string | null;
   private paymentKeyHash: string;
   private stakeKeyHash: string;
   private privKeyHashMap: Record<string, string | null>;
@@ -51,8 +52,6 @@ export class SeedWallet implements AbstractWallet {
     );
     this.address_ = address;
     this.rewardAddress_ = rewardAddress;
-    this.paymentKey = paymentKey;
-    this.stakeKey = stakeKey;
     const paymentKeyHash = C.PrivateKey.from_bech32(paymentKey)
       .to_public()
       .hash()
@@ -81,7 +80,7 @@ export class SeedWallet implements AbstractWallet {
   async getUtxos(): Promise<UTxO[]> {
     return this.translucent.utxosAt(paymentCredentialOf(this.address_));
   }
-  async getUtxosCore(): Promise<C.TransactionUnspentOutputs> {
+  async getUtxosCore(): Promise<CTransactionUnspentOutputs> {
     const coreUtxos = C.TransactionUnspentOutputs.new();
     (
       await this.translucent.utxosAt(paymentCredentialOf(this.address_))
@@ -96,7 +95,7 @@ export class SeedWallet implements AbstractWallet {
       ? await this.translucent.delegationAt(rewardAddr)
       : { poolId: null, rewards: 0n };
   }
-  async signTx(tx: C.Transaction): Promise<C.TransactionWitnessSet> {
+  async signTx(tx: CTransaction): Promise<CTransactionWitnessSet> {
     const utxos = await this.translucent.utxosAt(this.address_);
     const ownKeyHashes: Array<KeyHash> = [
       this.paymentKeyHash,

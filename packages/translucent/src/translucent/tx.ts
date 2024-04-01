@@ -1,6 +1,6 @@
-import { C, U } from "../core/mod.ts";
-import { Data } from "../mod.ts";
-import {
+import { C, CAddress, CCertificateBuilderResult, CInputBuilderResult, CMintBuilderResult, CNativeScript, CPlutusScript, CPlutusV2Script, CPoolRegistration, CRedeemer, CTransactionBuilder, CTransactionUnspentOutput, CWithdrawalBuilderResult, U } from "../core/mod";
+import { Data } from "../mod";
+import type {
   Address,
   Assets,
   CertificateValidator,
@@ -10,7 +10,6 @@ import {
   Lovelace,
   MintingPolicy,
   OutputData,
-  OutRef,
   PaymentKeyHash,
   PoolId,
   PoolParams,
@@ -32,29 +31,29 @@ import {
   PROTOCOL_PARAMETERS_DEFAULT,
   toScriptRef,
   utxoToCore,
-} from "../utils/mod.ts";
-import { applyDoubleCborEncoding } from "../utils/utils.ts";
-import { Translucent } from "./translucent.ts";
-import { TxComplete } from "./tx_complete.ts";
-import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
-import { toCore } from "../utils/to.ts";
+} from "../utils/mod";
+import { applyDoubleCborEncoding } from "../utils/utils";
+import { Translucent } from "./translucent";
+import { TxComplete } from "./tx_complete";
+import { SLOT_CONFIG_NETWORK } from "../plutus/time";
+import { toCore } from "../utils/to";
 
 type ScriptOrRef =
-  | { inlineScript: C.PlutusScript }
-  | { referenceScript: C.PlutusV2Script };
+  | { inlineScript: CPlutusScript }
+  | { referenceScript: CPlutusV2Script };
 
 export class Tx {
-  txBuilder: C.TransactionBuilder;
+  txBuilder: CTransactionBuilder;
 
   private scripts: Record<string, ScriptOrRef>;
-  private native_scripts: Record<string, C.NativeScript>;
+  private native_scripts: Record<string, CNativeScript>;
   /** Stores the tx instructions, which get executed after calling .complete() */
   private tasks: ((that: Tx) => unknown)[];
   private earlyTasks: ((that: Tx) => unknown)[];
   private translucent: Translucent;
 
-  private UTxOs: C.TransactionUnspentOutput[] = [];
-  private referencedUTxOs: C.TransactionUnspentOutput[] = [];
+  private UTxOs: CTransactionUnspentOutput[] = [];
+  private referencedUTxOs: CTransactionUnspentOutput[] = [];
 
   constructor(translucent: Translucent) {
     this.translucent = translucent;
@@ -112,7 +111,7 @@ export class Tx {
           coreUtxo.input(),
           coreUtxo.output(),
         );
-        let mr: C.InputBuilderResult;
+        let mr: CInputBuilderResult;
         let address = coreUtxo.output().address();
         let paymentCredential = address.payment_cred();
         if (redeemer && paymentCredential?.to_scripthash()) {
@@ -192,7 +191,7 @@ export class Tx {
         );
       });
       let mintBuilder = C.SingleMintBuilder.new(mintAssets);
-      let mr: C.MintBuilderResult;
+      let mr: CMintBuilderResult;
       if (redeemer) {
         let script = this.scripts[policyId];
         if (!script) {
@@ -377,7 +376,7 @@ export class Tx {
           ),
         ),
       );
-      let cr: C.CertificateBuilderResult;
+      let cr: CCertificateBuilderResult;
       if (redeemer) {
         let script = this.scripts[credential.to_scripthash()?.to_hex()!];
         if (!script) {
@@ -455,22 +454,22 @@ export class Tx {
       const credential =
         addressDetails.stakeCredential.type === "Key"
           ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            )
+            C.Ed25519KeyHash.from_bytes(
+              fromHex(addressDetails.stakeCredential.hash),
+            ),
+          )
           : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_bytes(
-                fromHex(addressDetails.stakeCredential.hash),
-              ),
-            );
+            C.ScriptHash.from_bytes(
+              fromHex(addressDetails.stakeCredential.hash),
+            ),
+          );
 
       let certBuilder = C.SingleCertificateBuilder.new(
         C.Certificate.new_stake_deregistration(
           C.StakeDeregistration.new(credential),
         ),
       );
-      let cr: C.CertificateBuilderResult;
+      let cr: CCertificateBuilderResult;
       if (redeemer) {
         let script = this.scripts[credential.to_scripthash()?.to_hex()!];
         if (!script) {
@@ -573,7 +572,7 @@ export class Tx {
         rewAdd,
         C.BigNum.from_str(amount.toString()),
       );
-      let wr: C.WithdrawalBuilderResult;
+      let wr: CWithdrawalBuilderResult;
       if (redeemer) {
         let script =
           this.scripts[rewAdd.payment_cred()?.to_scripthash()?.to_hex()!];
@@ -603,7 +602,7 @@ export class Tx {
         } else {
           let ns =
             this.native_scripts[
-              rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
+            rewAdd.payment_cred()?.to_scripthash()?.to_hex()!
             ];
           if (!ns) {
             throw "Script with no redeemer should be a nativescript, but none provided";
@@ -762,7 +761,7 @@ export class Tx {
       let ns = C.NativeScript.from_bytes(fromHex(script));
       this.native_scripts[ns.hash().to_hex()] = ns;
     } else if (type === "PlutusV1" || type === "PlutusV2") {
-      let ps: C.PlutusScript;
+      let ps: CPlutusScript;
       if (type === "PlutusV1") {
         ps = C.PlutusScript.from_v1(
           C.PlutusV1Script.from_bytes(fromHex(applyDoubleCborEncoding(script))),
@@ -825,13 +824,13 @@ export class Tx {
     // }
 
     const rawWalletUTxOs = await this.translucent.wallet.getUtxosCore();
-    let walletUTxOs: C.TransactionUnspentOutput[] = [];
+    let walletUTxOs: CTransactionUnspentOutput[] = [];
     for (let i = 0; i < rawWalletUTxOs.len(); i++) {
       walletUTxOs.push(rawWalletUTxOs.get(i));
     }
     let allUtxos = [...this.UTxOs, ...walletUTxOs, ...this.referencedUTxOs];
 
-    const changeAddress: C.Address = addressFromWithNetworkCheck(
+    const changeAddress: CAddress = addressFromWithNetworkCheck(
       options?.change?.address || (await this.translucent.wallet.address()),
       this.translucent,
     );
@@ -928,7 +927,7 @@ export class Tx {
     );
     const redeemers = C.Redeemers.new();
     for (const redeemerBytes of uplcResults) {
-      let redeemer: C.Redeemer = C.Redeemer.from_bytes(redeemerBytes);
+      let redeemer: CRedeemer = C.Redeemer.from_bytes(redeemerBytes);
       const exUnits = C.ExUnits.new(
         C.BigNum.from_str(
           Math.floor(
@@ -955,11 +954,11 @@ export class Tx {
       const unhashedData = builtTx.witness_set().plutus_data();
       let hashes = [];
       if (unhashedData) {
-        for (let i = 0; i < unhashedData.len(), i++; ) {
+        for (let i = 0; i < unhashedData.len(), i++;) {
           hashes.push(C.hash_plutus_data(unhashedData.get(i)).to_hex());
         }
       }
-      for (let i = 0; i < builtTx.body().inputs().len(), i++; ) {
+      for (let i = 0; i < builtTx.body().inputs().len(), i++;) {
         const input = builtTx.body().inputs().get(i);
         const utxo = allUtxos.find(
           (utxo) => utxo.input().to_bytes() == input.to_bytes(),
@@ -1010,7 +1009,7 @@ export class Tx {
 async function createPoolRegistration(
   poolParams: PoolParams,
   translucent: Translucent,
-): Promise<C.PoolRegistration> {
+): Promise<CPoolRegistration> {
   const poolOwners = C.Ed25519KeyHashes.new();
   poolParams.owners.forEach((owner) => {
     const { stakeCredential } = translucent.utils.getAddressDetails(owner);
@@ -1025,8 +1024,8 @@ async function createPoolRegistration(
 
   const metadataHash = metadata
     ? C.PoolMetadata.from_bytes(
-        Buffer.from(new Uint8Array(metadata)),
-      ).pool_metadata_hash()
+      Buffer.from(new Uint8Array(metadata)),
+    ).pool_metadata_hash()
     : null;
 
   const relays = C.Relays.new();
@@ -1035,8 +1034,8 @@ async function createPoolRegistration(
       case "SingleHostIp": {
         const ipV4 = relay.ipV4
           ? C.Ipv4.new(
-              new Uint8Array(relay.ipV4.split(".").map((b) => parseInt(b))),
-            )
+            new Uint8Array(relay.ipV4.split(".").map((b) => parseInt(b))),
+          )
           : undefined;
         const ipV6 = relay.ipV6
           ? C.Ipv6.new(fromHex(relay.ipV6.replaceAll(":", "")))
@@ -1095,7 +1094,7 @@ async function createPoolRegistration(
 function addressFromWithNetworkCheck(
   address: Address | RewardAddress,
   translucent: Translucent,
-): C.Address {
+): CAddress {
   const { type, networkId } = translucent.utils.getAddressDetails(address);
 
   const actualNetworkId = networkToId(translucent.network);

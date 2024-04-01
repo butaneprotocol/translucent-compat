@@ -1,18 +1,21 @@
 import {
-  Address,
-  Delegation,
-  Payload,
-  RewardAddress,
-  SignedMessage,
-  Transaction,
-  TxHash,
-  UTxO,
-  WalletApi,
+  type Address,
+  type Delegation,
+  type Payload,
+  type RewardAddress,
+  type SignedMessage,
+  type Transaction,
+  type TxHash,
+  type UTxO,
+  type WalletApi,
   coreToUtxo,
   fromHex,
   toHex,
   C,
   Translucent,
+  CTransactionUnspentOutputs,
+  CTransaction,
+  CTransactionWitnessSet,
 } from "../mod";
 import { AbstractWallet } from "./abstract";
 
@@ -42,10 +45,10 @@ export class WalletConnector implements AbstractWallet {
     const [rewardAddressHex] = await this.api.getRewardAddresses();
     const rewardAddress = rewardAddressHex
       ? C.RewardAddress.from_address(
-          C.Address.from_bytes(fromHex(rewardAddressHex)),
-        )!
-          .to_address()
-          .to_bech32(undefined)
+        C.Address.from_bytes(fromHex(rewardAddressHex)),
+      )!
+        .to_address()
+        .to_bech32(undefined)
       : null;
     return rewardAddress;
   }
@@ -56,7 +59,7 @@ export class WalletConnector implements AbstractWallet {
     });
     return utxos;
   }
-  async getUtxosCore(): Promise<C.TransactionUnspentOutputs> {
+  async getUtxosCore(): Promise<CTransactionUnspentOutputs> {
     const utxos = C.TransactionUnspentOutputs.new();
     ((await this.api.getUtxos()) || []).forEach((utxo) => {
       utxos.add(C.TransactionUnspentOutput.from_bytes(fromHex(utxo)));
@@ -69,7 +72,7 @@ export class WalletConnector implements AbstractWallet {
       ? await this.translucent.delegationAt(rewardAddr)
       : { poolId: null, rewards: 0n };
   }
-  async signTx(tx: C.Transaction): Promise<C.TransactionWitnessSet> {
+  async signTx(tx: CTransaction): Promise<CTransactionWitnessSet> {
     const witnessSet = await this.api.signTx(toHex(tx.to_bytes()), true);
     return C.TransactionWitnessSet.from_bytes(fromHex(witnessSet));
   }

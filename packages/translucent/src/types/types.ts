@@ -1,5 +1,3 @@
-import { C } from "../core/mod.ts";
-
 type CostModel = Record<string, number>;
 
 export type CostModels = Record<PlutusVersion, CostModel>;

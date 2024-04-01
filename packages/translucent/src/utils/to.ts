@@ -1,5 +1,5 @@
 import * as C from "@dcspark/cardano-multiplatform-lib-nodejs";
-import { Credential } from "../mod";
+import type { Credential } from "../mod";
 
 export const toCore = {
   credential(credential: Credential): C.StakeCredential {

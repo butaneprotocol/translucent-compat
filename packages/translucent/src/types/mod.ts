@@ -1,2 +1,2 @@
-export * from "./types.ts";
-export * from "./global.ts";
+export * from "./types";
+export * from "./global";

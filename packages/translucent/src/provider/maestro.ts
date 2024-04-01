@@ -1,6 +1,6 @@
-import { C } from "../core/mod.ts";
-import { applyDoubleCborEncoding, fromHex } from "../utils/mod.ts";
-import {
+import { C } from "../core/mod";
+import { applyDoubleCborEncoding, fromHex } from "../utils/mod";
+import type {
   Address,
   Assets,
   Credential,
@@ -17,7 +17,7 @@ import {
   Unit,
   UTxO,
 } from "../types/mod.ts";
-import packageJson from "../../package.json" assert { type: "json" };
+import packageJson from "../../package.json";
 
 export type MaestroSupportedNetworks = "Mainnet" | "Preprod" | "Preview";
 
@@ -101,11 +101,11 @@ export class Maestro implements Provider {
       credentialBech32Query +=
         addressOrCredential.type === "Key"
           ? C.Ed25519KeyHash.from_hex(addressOrCredential.hash).to_bech32(
-              "addr_vkh",
-            )
+            "addr_vkh",
+          )
           : C.ScriptHash.from_hex(addressOrCredential.hash).to_bech32(
-              "addr_shared_vkh",
-            );
+            "addr_shared_vkh",
+          );
       return credentialBech32Query;
     })();
     const qparams = new URLSearchParams({
@@ -147,7 +147,7 @@ export class Maestro implements Provider {
       }
       throw new Error(
         "Location: getUtxoByUnit. Error: Couldn't perform query. Received status code: " +
-          timestampedAddressesResponse.status,
+        timestampedAddressesResponse.status,
       );
     }
     const addressesWithAmount = timestampedAddresses.data;
@@ -224,7 +224,7 @@ export class Maestro implements Provider {
       } else {
         throw new Error(
           "Location: getDatum. Error: Couldn't successfully perform query. Received status code: " +
-            timestampedResultResponse.status,
+          timestampedResultResponse.status,
         );
       }
     }
@@ -269,7 +269,7 @@ export class Maestro implements Provider {
       else {
         throw new Error(
           "Could not submit transaction. Received status code: " +
-            response.status,
+          response.status,
         );
       }
     }
@@ -309,12 +309,12 @@ export class Maestro implements Provider {
         ? result.reference_script.type == "native"
           ? undefined
           : {
-              type:
-                result.reference_script.type == "plutusv1"
-                  ? "PlutusV1"
-                  : "PlutusV2",
-              script: applyDoubleCborEncoding(result.reference_script.bytes!),
-            }
+            type:
+              result.reference_script.type == "plutusv1"
+                ? "PlutusV1"
+                : "PlutusV2",
+            script: applyDoubleCborEncoding(result.reference_script.bytes!),
+          }
         : undefined,
     };
   }

@@ -1,19 +1,16 @@
-import { C } from "../core/mod.ts";
+import { C, CTransactionBuilderConfig } from "../core/mod";
 import {
   createCostModels,
   fromHex,
   fromUnit,
-  paymentCredentialOf,
   toUnit,
   Utils,
-  utxoToCore,
-} from "../utils/mod.ts";
-import {
+} from "../utils/mod";
+import type {
   Address,
   Credential,
   Delegation,
   Json,
-  KeyHash,
   Network,
   OutRef,
   Payload,
@@ -27,24 +24,22 @@ import {
   Unit,
   UTxO,
   WalletApi,
-} from "../types/mod.ts";
-import { Tx } from "./tx.ts";
-import { TxComplete } from "./tx_complete.ts";
-import { discoverOwnUsedTxKeyHashes, walletFromSeed } from "../misc/wallet.ts";
-import { signData, verifyData } from "../misc/sign_data.ts";
-import { Message } from "./message.ts";
-import { SLOT_CONFIG_NETWORK } from "../plutus/time.ts";
-import { Constr, Data } from "../plutus/data.ts";
-import { Emulator } from "../provider/emulator.ts";
-import { toCore } from "../utils/to.ts";
-import { WalletConnector } from "../wallets/wallet_connector.ts";
-import { AbstractWallet } from "../wallets/abstract.ts";
-import { PrivateKeyWallet } from "../wallets/private_key.ts";
-import { SeedWallet } from "../wallets/seed.ts";
-import { ExternalWallet } from "../wallets/public_wallet.ts";
+} from "../types/mod";
+import { Tx } from "./tx";
+import { TxComplete } from "./tx_complete";
+import { verifyData } from "../misc/sign_data";
+import { Message } from "./message";
+import { SLOT_CONFIG_NETWORK } from "../plutus/time";
+import { Constr, Data } from "../plutus/data";
+import { Emulator } from "../provider/emulator";
+import { WalletConnector } from "../wallets/wallet_connector";
+import { AbstractWallet } from "../wallets/abstract";
+import { PrivateKeyWallet } from "../wallets/private_key";
+import { SeedWallet } from "../wallets/seed";
+import { ExternalWallet } from "../wallets/public_wallet";
 
 export class Translucent {
-  txBuilderConfig!: C.TransactionBuilderConfig;
+  txBuilderConfig!: CTransactionBuilderConfig;
   wallet!: AbstractWallet;
   provider!: Provider;
   network: Network = "Mainnet";

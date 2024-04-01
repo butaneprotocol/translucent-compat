@@ -1,2 +1,2 @@
-export * from "./data.ts";
-export * from "./time.ts";
+export * from "./data";
+export * from "./time";
