@@ -1,6 +1,6 @@
 {
-  "name": "translucent-cardano",
-  "version": "0.0.6",
+  "name": "@minswap/translucent",
+  "version": "0.0.6-minswap.0",
   "scripts": {
     "build": "rimraf build && rollup -c rollup.config.mjs"
   },
@@ -15,11 +15,15 @@
     "@rollup/plugin-json": "^6.0.1",
     "@types/jest": "^29.5.5",
     "@types/sha256": "^0.2.2",
+    "@types/node": "^20.12.2",
     "bun-types": "latest",
     "eslint": "^8.50.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "rimraf": "^5.0.5",
+    "prettier": "^3.1.1",
+    "fast-check": "^3.14.0"
   },
   "dependencies": {
     "@dcspark/cardano-multiplatform-lib-browser": "^3.1.2",
@@ -27,13 +31,9 @@
     "@emurgo/cardano-message-signing-browser": "^1.0.1",
     "@emurgo/cardano-message-signing-nodejs": "^1.0.1",
     "@sinclair/typebox": "^0.31.28",
-    "@vercel/ncc": "^0.38.1",
-    "fast-check": "^3.14.0",
-    "prettier": "^3.1.1",
     "sha256": "^0.2.0",
     "uplc-node": "^0.0.3",
     "uplc-web": "^0.0.3",
-    "rimraf": "^5.0.5",
     "rollup": "^4.5.0",
     "rollup-plugin-dts": "^6.1.0",
     "rollup-plugin-esbuild": "^6.1.0"
