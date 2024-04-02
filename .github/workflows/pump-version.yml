@@ -1,0 +1,45 @@
+name: Bump Version on Merge
+
+on:
+  push:
+    branches:
+      - minswap
+
+jobs:
+  bump_version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Calculate Next Version
+        run: |
+            # Get the current version from the subdirectory's package.json
+            current_version=$(jq -r '.version' packages/translucent/package.json)
+
+            # Calculate and append the next version directly into GITHUB_ENV in one line
+            echo "NEXT_VERSION=$(echo "$current_version" | awk -F'[-.]' '{print $1"."$2"."$3"-minswap."$5+1}')" >> "$GITHUB_ENV"
+      
+      - name: Authenticate with private NPM package
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - name: Install Dependencies
+        run: |
+          cd packages/translucent
+          pnpm install
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@users.noreply.github.com"
+          
+      - name: Bump Version and Publish
+        run: |
+          ./scripts/pump-version.sh ${{ env.NEXT_VERSION }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

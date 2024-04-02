@@ -2,7 +2,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - minswap
+
 jobs:
   build:
     runs-on: ubuntu-latest
