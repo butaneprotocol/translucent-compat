@@ -2,26 +2,6 @@
 
 var sha256 = require('sha256');
 var typebox = require('@sinclair/typebox');
-var C = require('@dcspark/cardano-multiplatform-lib-nodejs');
-
-function _interopNamespaceDefault(e) {
-  var n = Object.create(null);
-  if (e) {
-    Object.keys(e).forEach(function (k) {
-      if (k !== 'default') {
-        var d = Object.getOwnPropertyDescriptor(e, k);
-        Object.defineProperty(n, k, d.get ? d : {
-          enumerable: true,
-          get: function () { return e[k]; }
-        });
-      }
-    });
-  }
-  n.default = e;
-  return Object.freeze(n);
-}
-
-var C__namespace = /*#__PURE__*/_interopNamespaceDefault(C);
 
 exports.C = void 0;
 exports.U = void 0;
@@ -3944,12 +3924,12 @@ function replaceProperties(object, properties) {
 const toCore = {
   credential(credential) {
     if (credential.type == "Key") {
-      return C__namespace.StakeCredential.from_keyhash(
-        C__namespace.Ed25519KeyHash.from_hex(credential.hash)
+      return exports.C.StakeCredential.from_keyhash(
+        exports.C.Ed25519KeyHash.from_hex(credential.hash)
       );
     } else if (credential.type == "Script") {
-      return C__namespace.StakeCredential.from_scripthash(
-        C__namespace.ScriptHash.from_hex(credential.hash)
+      return exports.C.StakeCredential.from_scripthash(
+        exports.C.ScriptHash.from_hex(credential.hash)
       );
     }
     throw new Error("Lucid credential type mismatch");

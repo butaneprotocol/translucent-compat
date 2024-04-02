@@ -1,6 +1,5 @@
 import sha256 from 'sha256';
 import { Type } from '@sinclair/typebox';
-import * as C$1 from '@dcspark/cardano-multiplatform-lib-nodejs';
 
 let C;
 let U;
@@ -3923,12 +3922,12 @@ function replaceProperties(object, properties) {
 const toCore = {
   credential(credential) {
     if (credential.type == "Key") {
-      return C$1.StakeCredential.from_keyhash(
-        C$1.Ed25519KeyHash.from_hex(credential.hash)
+      return C.StakeCredential.from_keyhash(
+        C.Ed25519KeyHash.from_hex(credential.hash)
       );
     } else if (credential.type == "Script") {
-      return C$1.StakeCredential.from_scripthash(
-        C$1.ScriptHash.from_hex(credential.hash)
+      return C.StakeCredential.from_scripthash(
+        C.ScriptHash.from_hex(credential.hash)
       );
     }
     throw new Error("Lucid credential type mismatch");
