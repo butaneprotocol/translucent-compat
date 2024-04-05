@@ -18,6 +18,79 @@ async function loadModule() {
   }
 }
 
+class CModuleLoader {
+  private _wasm: CModule | null = null;
+
+  get get(): CModule {
+    if (this._wasm === null) {
+      throw new Error("C has not been loaded");
+    }
+    return this._wasm;
+  }
+
+  async load(): Promise<void> {
+    if (this._wasm !== null) {
+      return;
+    }
+
+    if (process.browser) {
+      this._wasm = await import("@dcspark/cardano-multiplatform-lib-browser");
+    } else {
+      this._wasm = await import("@dcspark/cardano-multiplatform-lib-nodejs");
+    }
+  }
+}
+
+class UModuleLoader {
+  private _wasm: UModule | null = null;
+
+  get get(): UModule {
+    if (this._wasm === null) {
+      throw new Error("U has not been loaded");
+    }
+    return this._wasm;
+  }
+
+  async load(): Promise<void> {
+    if (this._wasm !== null) {
+      return;
+    }
+
+    if (process.browser) {
+      this._wasm = await import("uplc-web");
+    } else {
+      this._wasm = await import("uplc-node");
+    }
+  }
+}
+
+class MModuleLoader {
+  private _wasm: MModule | null = null;
+
+  get get(): MModule {
+    if (this._wasm === null) {
+      throw new Error("M has not been loaded");
+    }
+    return this._wasm;
+  }
+
+  async load(): Promise<void> {
+    if (this._wasm !== null) {
+      return;
+    }
+
+    if (process.browser) {
+      this._wasm = await import("@emurgo/cardano-message-signing-browser");
+    } else {
+      this._wasm = await import("@emurgo/cardano-message-signing-nodejs");
+    }
+  }
+}
+
+export const cModuleLoader: CModuleLoader = new CModuleLoader();
+export const uModuleLoader: UModuleLoader = new UModuleLoader();
+export const mModuleLoader: MModuleLoader = new MModuleLoader();
+
 export type {
   Address as CAddress,
   BigNum as CBigNum,
@@ -46,7 +119,15 @@ export type {
   WithdrawalBuilderResult as CWithdrawalBuilderResult,
 } from "@dcspark/cardano-multiplatform-lib-nodejs";
 
-export { C, U, M, loadModule };
+export {
+  C,
+  U,
+  M,
+  loadModule,
+  cModuleLoader as CModuleLoader,
+  uModuleLoader as UModuleLoader,
+  mModuleLoader as MModuleLoader,
+};
 
 declare global {
   namespace NodeJS {
