@@ -1,6 +1,6 @@
 <p align="center">
   <img width="100px" src="./logo/translucent.svg" align="center"/>
-  <h1 align="center">Translucent</h1>
+  <h1 align="center">Translucent-compat</h1>
   <p align="center">Translucent is a library, which allows you to create Cardano transactions and off-chain code for your Plutus contracts in JavaScript.<br/>
   Translucent forks from Lucid and makes major breaking changes.</p>
 <p align="center">
