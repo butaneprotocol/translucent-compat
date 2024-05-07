@@ -1,22 +1,7 @@
 <p align="center">
   <img width="100px" src="./logo/translucent.svg" align="center"/>
   <h1 align="center">Translucent-compat</h1>
-  <p align="center">Translucent is a library, which allows you to create Cardano transactions and off-chain code for your Plutus contracts in JavaScript.<br/>
-  Translucent forks from Lucid and makes major breaking changes.</p>
-<p align="center">
-    <img src="https://img.shields.io/github/commit-activity/m/txpipe/translucent?style=for-the-badge" />
-    <a href="https://www.npmjs.com/package/translucent-cardano">
-      <img src="https://img.shields.io/npm/v/translucent-cardano?style=for-the-badge" />
-    </a>
-    <a href="https://www.npmjs.com/package/translucent-cardano">
-      <img src="https://img.shields.io/npm/dw/translucent-cardano?style=for-the-badge" />
-    </a>
-    <img src="https://img.shields.io/npm/l/translucent-cardano?style=for-the-badge" />
-    <a href="https://twitter.com/txpipe_tools">
-      <img src="https://img.shields.io/twitter/follow/txpipe_tools?style=for-the-badge&logo=twitter" />
-    </a>
-  </p>
-
+  <p align="center">Translucent was a fork of the Lucid library. It is **deprecated** in favour of <a href="https://github.com/butaneprotocol/blaze-cardano" target="_blank">blaze</a> </p>
 </p>
 
 ### Get started
