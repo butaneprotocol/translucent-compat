@@ -16,7 +16,7 @@ import {
   UTxO,
 } from "../types/mod.ts";
 import { C } from "../core/mod.ts";
-import { costModelKeys, fromUnit } from "../utils/mod.ts";
+import { costModelKeys, fromHex, fromUnit, toHex } from "../utils/mod.ts";
 import * as ogmios from "@cardano-ogmios/schema";
 
 function fromMaybeBuffer(x: string | Buffer) {
@@ -68,7 +68,7 @@ export class Kupmios implements Provider {
       client.addEventListener(
         "message",
         (msg: MessageEvent<string | Buffer>): unknown => {
-          console.log("queryLedgerState/protocolParameters", msg.data);
+          //console.log("queryLedgerState/protocolParameters", msg.data);
           try {
             const {
               result,
@@ -97,11 +97,11 @@ export class Kupmios implements Provider {
               result.scriptExecutionPrices!.cpu.split("/");
             const protocolParams: ProtocolParameters = {
               minFeeA: result.minFeeCoefficient,
-              minFeeB: Number(result.minFeeConstant.lovelace),
+              minFeeB: Number(result.minFeeConstant.ada.lovelace),
               maxTxSize: result.maxTransactionSize!.bytes,
               maxValSize: result.maxValueSize!.bytes,
-              keyDeposit: BigInt(result.stakeCredentialDeposit.lovelace),
-              poolDeposit: BigInt(result.stakePoolDeposit.lovelace),
+              keyDeposit: BigInt(result.stakeCredentialDeposit.ada.lovelace),
+              poolDeposit: BigInt(result.stakePoolDeposit.ada.lovelace),
               priceMem: [BigInt(memNum), BigInt(memDenom)],
               priceStep: [BigInt(stepsNum), BigInt(stepsDenom)],
               maxTxExMem: BigInt(
@@ -126,54 +126,17 @@ export class Kupmios implements Provider {
   }
 
   async getUtxos(addressOrCredential: Address | Credential): Promise<UTxO[]> {
-    let addy =
-      typeof addressOrCredential == "string"
+      const isAddress = typeof addressOrCredential === "string";
+      const queryPredicate = isAddress
         ? addressOrCredential
-        : C.EnterpriseAddress.new(
-            0,
-            C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(addressOrCredential.hash),
-            ),
-          )
-            .to_address()
-            .to_bech32(undefined);
-    let params: ogmios.UtxoByAddresses | ogmios.UtxoByOutputReferences = {
-      addresses: [addy],
-    };
-    const client = await this.ogmiosWsp("queryLedgerState/utxo", params);
-    return new Promise((res, rej) => {
-      client.addEventListener(
-        "message",
-        (msg: MessageEvent<string | Buffer>) => {
-          try {
-            const response:
-              | ogmios.QueryLedgerStateUtxoResponse
-              | ogmios.QueryLedgerStateEraMismatch
-              | ogmios.QueryLedgerStateAcquiredExpired = JSON.parse(
-              fromMaybeBuffer(msg.data),
-            );
-            if ("result" in response) {
-              res(
-                response.result.map((utxo) => {
-                  return {
-                    txHash: utxo.transaction.id,
-                    outputIndex: utxo.index,
-                    assets: fromOgmiosValue(utxo.value),
-                    address: utxo.address,
-                    datumHash: utxo.datumHash,
-                    datum: utxo.datum,
-                    script: utxo.script,
-                  } as UTxO;
-                }),
-              );
-            } else {
-              console.error("UTXO Fetch error", response.error);
-            }
-          } catch {}
-        },
-      );
-    });
-  }
+        : addressOrCredential.hash;
+      const result = await fetch(
+        `${this.kupoUrl}/matches/${queryPredicate}${
+          isAddress ? "" : "/*"
+        }?unspent`,
+      ).then((res) => res.json());
+      return this.kupmiosUtxosToUtxos(result);
+    }
 
   async getUtxosWithUnit(
     addressOrCredential: Address | Credential,
@@ -231,44 +194,26 @@ export class Kupmios implements Provider {
   }
 
   async getUtxosByOutRef(outRefs: Array<OutRef>): Promise<UTxO[]> {
-    let params: ogmios.UtxoByAddresses | ogmios.UtxoByOutputReferences = {
-      outputReferences: outRefs.map((x) => {
-        return { transaction: { id: x.txHash }, index: x.outputIndex };
+    const queryHashes = [...new Set(outRefs.map((outRef) => outRef.txHash))];
+
+    const utxos = await Promise.all(
+      queryHashes.map(async (txHash) => {
+        const result = await fetch(
+          `${this.kupoUrl}/matches/*@${txHash}?unspent`,
+        ).then((res) => res.json());
+        return this.kupmiosUtxosToUtxos(result);
       }),
-    };
-    const client = await this.ogmiosWsp("queryLedgerState/utxo", params);
-    return new Promise((res, rej) => {
-      client.addEventListener(
-        "message",
-        (msg: MessageEvent<string | Buffer>) => {
-          try {
-            const response:
-              | ogmios.QueryLedgerStateUtxoResponse
-              | ogmios.QueryLedgerStateEraMismatch
-              | ogmios.QueryLedgerStateAcquiredExpired = JSON.parse(
-              fromMaybeBuffer(msg.data),
-            );
-            if ("result" in response) {
-              res(
-                response.result.map((utxo) => {
-                  return {
-                    txHash: utxo.transaction.id,
-                    outputIndex: utxo.index,
-                    assets: fromOgmiosValue(utxo.value),
-                    address: utxo.address,
-                    datumHash: utxo.datumHash,
-                    datum: utxo.datum,
-                    script: utxo.script,
-                  } as UTxO;
-                }),
-              );
-            } else {
-              console.error("UTXO Fetch error", response.error);
-            }
-          } catch {}
-        },
+    );
+
+    return utxos
+      .reduce((acc, utxos) => acc.concat(utxos), [])
+      .filter((utxo) =>
+        outRefs.some(
+          (outRef) =>
+            utxo.txHash === outRef.txHash &&
+            utxo.outputIndex === outRef.outputIndex,
+        ),
       );
-    });
   }
 
   async getDelegation(rewardAddress: RewardAddress): Promise<Delegation> {
@@ -375,5 +320,55 @@ export class Kupmios implements Provider {
       }),
     );
     return client;
+  }
+
+  private kupmiosUtxosToUtxos(utxos: unknown): Promise<UTxO[]> {
+    // deno-lint-ignore no-explicit-any
+    return Promise.all(
+      (utxos as any).map(async (utxo: any) => {
+        return {
+          txHash: utxo.transaction_id,
+          outputIndex: parseInt(utxo.output_index),
+          address: utxo.address,
+          assets: (() => {
+            const a: Assets = { lovelace: BigInt(utxo.value.coins) };
+            Object.keys(utxo.value.assets).forEach((unit) => {
+              a[unit.replace(".", "")] = BigInt(utxo.value.assets[unit]);
+            });
+            return a;
+          })(),
+          datumHash: utxo?.datum_type === "hash" ? utxo.datum_hash : null,
+          datum:
+            utxo?.datum_type === "inline"
+              ? await this.getDatum(utxo.datum_hash)
+              : null,
+          scriptRef:
+            utxo.script_hash &&
+            (await (async () => {
+              const { script, language } = await fetch(
+                `${this.kupoUrl}/scripts/${utxo.script_hash}`,
+              ).then((res) => res.json());
+
+              if (language === "native") {
+                return { type: "Native", script };
+              } else if (language === "plutus:v1") {
+                return {
+                  type: "PlutusV1",
+                  script: toHex(
+                    C.PlutusV1Script.new(fromHex(script)).to_bytes(),
+                  ),
+                };
+              } else if (language === "plutus:v2") {
+                return {
+                  type: "PlutusV2",
+                  script: toHex(
+                    C.PlutusV2Script.new(fromHex(script)).to_bytes(),
+                  ),
+                };
+              }
+            })()),
+        } as UTxO;
+      }),
+    );
   }
 }
