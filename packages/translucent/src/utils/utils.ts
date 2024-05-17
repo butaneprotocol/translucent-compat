@@ -655,6 +655,9 @@ export function toUnit(
   name?: string | null,
   label?: number | null,
 ): Unit {
+  if (policyId === "" && !name) {
+    return "lovelace";
+  }
   const hexLabel = Number.isInteger(label) ? toLabel(label!) : "";
   const n = name ? name : "";
   if ((n + hexLabel).length > 64) {
