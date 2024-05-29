@@ -1,6 +1,6 @@
 {
   "name": "@minswap/translucent",
-  "version": "0.0.6-minswap.9",
+  "version": "0.0.6-minswap.10",
   "scripts": {
     "build": "rimraf build && rollup -c rollup.config.mjs"
   },
