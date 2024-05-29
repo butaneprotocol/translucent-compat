@@ -258,10 +258,16 @@ export class Tx {
           parseInt(output.output().amount().coin().to_str()),
           Number(assets.lovelace || 0),
         );
-        valueBuilder = valueBuilder.with_coin_and_asset(
-          C.BigNum.from_str(coin.toString()),
-          masset,
-        );
+        if (masset.len() > 0) {
+          valueBuilder = valueBuilder.with_coin_and_asset(
+            C.BigNum.from_str(coin.toString()),
+            masset,
+          );
+        } else {
+          valueBuilder = valueBuilder.with_coin(
+            C.BigNum.from_str(coin.toString())
+          );
+        }
       }
       that.txBuilder.add_output(valueBuilder.build());
     });
