@@ -101,6 +101,13 @@ export class Emulator implements Provider {
     this.protocolParameters = protocolParameters;
   }
 
+  addUTxO(utxo: UTxO) {
+    this.ledger[utxo.txHash + utxo.outputIndex] = {
+      utxo,
+      spent: false,
+    }
+  }
+
   now(): UnixTime {
     return this.time;
   }

@@ -78,22 +78,22 @@ export class Tx {
         }
         const coreUtxo = utxoToCore(utxo);
         const coreUtxoHex = toHex(coreUtxo.to_bytes());
-        let isExists = refUtxos.has(coreUtxoHex);
-        if (!isExists) {
-          refUtxos.add(coreUtxoHex);
-          let scriptRef = coreUtxo.output().script_ref();
-          if (scriptRef) {
-            let script = scriptRef.script();
-            if (!script.as_plutus_v2()) {
-              throw "Reference script wasn't V2 compatible";
-            }
-            this.scripts[script.hash().to_hex()] = {
-              referenceScript: script.as_plutus_v2()!,
-            };
-          }
-          this.referencedUTxOs.push(coreUtxo);
-          that.txBuilder.add_reference_input(coreUtxo);
+        if (refUtxos.has(coreUtxoHex)) {
+          continue;
         }
+        refUtxos.add(coreUtxoHex);
+        let scriptRef = coreUtxo.output().script_ref();
+        if (scriptRef) {
+          let script = scriptRef.script();
+          if (!script.as_plutus_v2()) {
+            throw "Reference script wasn't V2 compatible";
+          }
+          this.scripts[script.hash().to_hex()] = {
+            referenceScript: script.as_plutus_v2()!,
+          };
+        }
+        this.referencedUTxOs.push(coreUtxo);
+        that.txBuilder.add_reference_input(coreUtxo);
       }
     });
     return this;
