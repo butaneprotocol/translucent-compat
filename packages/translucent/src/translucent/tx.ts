@@ -330,10 +330,16 @@ export class Tx {
           parseInt(output.output().amount().coin().to_str()),
           Number(assets.lovelace || 0),
         );
-        valueBuilder = valueBuilder.with_coin_and_asset(
-          C.BigNum.from_str(coin.toString()),
-          masset,
-        );
+        if (masset.len() > 0) {
+          valueBuilder = valueBuilder.with_coin_and_asset(
+            C.BigNum.from_str(coin.toString()),
+            masset,
+          );
+        } else {
+          valueBuilder = valueBuilder.with_coin(
+            C.BigNum.from_str(coin.toString())
+          );
+        }
       }
       let output = valueBuilder.build();
       that.txBuilder.add_output(output);
@@ -870,11 +876,16 @@ export class Tx {
         let params = this.translucent.provider
           ? await this.translucent.provider.getProtocolParameters()
           : PROTOCOL_PARAMETERS_DEFAULT;
-        let multiAsset = foundUtxo.output().amount().multiasset();
+        let multiAsset = foundUtxo.output().amount().multiasset() ?? C.MultiAsset.new();
         amtBuilder = amtBuilder.with_asset_and_min_required_coin(
-          multiAsset || C.MultiAsset.new(),
+          multiAsset,
           C.BigNum.from_str(params.coinsPerUtxoByte.toString()),
         );
+        if (multiAsset.len() == 0) {
+          amtBuilder = amtBuilder.with_coin(
+            C.BigNum.from_str(amtBuilder.build().output().amount().coin().to_str())
+          );
+        }
         const collateralReturn = amtBuilder.build().output();
         this.txBuilder.add_collateral(collateralUTxO);
         this.txBuilder.set_collateral_return(collateralReturn);
