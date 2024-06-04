@@ -19,11 +19,11 @@ jobs:
 
       - name: Calculate Next Version
         run: |
-            # Get the current version from the subdirectory's package.json
-            current_version=$(jq -r '.version' packages/translucent/package.json)
+            # Get the latest version from NPM
+            LATEST_VERSION=$(npm view @minswap/translucent version)
 
             # Calculate and append the next version directly into GITHUB_ENV in one line
-            echo "NEXT_VERSION=$(echo "$current_version" | awk -F'[-.]' '{print $1"."$2"."$3"-minswap."$5+1}')" >> "$GITHUB_ENV"
+            echo "NEXT_VERSION=$(echo "$LATEST_VERSION" | awk -F'[-.]' '{print $1"."$2"."$3"-minswap."$5+1}')" >> "$GITHUB_ENV"
       
       - name: Authenticate with private NPM package
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc

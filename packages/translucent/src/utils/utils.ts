@@ -474,7 +474,7 @@ export function assetsToValue(assets: Assets): CValue {
   const value = C.Value.new(
     C.BigNum.from_str(lovelace ? lovelace.toString() : "0"),
   );
-  if (units.length > 1 || !lovelace) value.set_multiasset(multiAsset);
+  if (policies.length > 0) value.set_multiasset(multiAsset);
   return value;
 }
 
