@@ -1,12 +1,12 @@
-import { C } from "../core/mod.ts";
-import { Transaction, TxHash } from "../types/mod.ts";
-import { Translucent } from "./translucent.ts";
-import { toHex } from "../utils/mod.ts";
+import { C, CTransaction } from "../core/mod";
+import type { Transaction, TxHash } from "../types/mod";
+import { Translucent } from "./translucent";
+import { toHex } from "../utils/mod";
 
 export class TxSigned {
-  txSigned: C.Transaction;
+  txSigned: CTransaction;
   private translucent: Translucent;
-  constructor(translucent: Translucent, tx: C.Transaction) {
+  constructor(translucent: Translucent, tx: CTransaction) {
     this.translucent = translucent;
     this.txSigned = tx;
   }

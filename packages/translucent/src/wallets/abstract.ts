@@ -1,6 +1,5 @@
-import {
+import type {
   UTxO,
-  C,
   Delegation,
   Payload,
   TxHash,
@@ -8,15 +7,18 @@ import {
   RewardAddress,
   Transaction,
   SignedMessage,
+  CTransactionWitnessSet,
+  CTransactionUnspentOutputs,
+  CTransaction,
 } from "../mod";
 
 export abstract class AbstractWallet {
   abstract address(): Promise<Address>;
   abstract rewardAddress(): Promise<RewardAddress | null>;
   abstract getUtxos(): Promise<UTxO[]>;
-  abstract getUtxosCore(): Promise<C.TransactionUnspentOutputs>;
+  abstract getUtxosCore(): Promise<CTransactionUnspentOutputs>;
   abstract getDelegation(): Promise<Delegation>;
-  abstract signTx(tx: C.Transaction): Promise<C.TransactionWitnessSet>;
+  abstract signTx(tx: CTransaction): Promise<CTransactionWitnessSet>;
   abstract signMessage(
     address: Address | RewardAddress,
     payload: Payload,

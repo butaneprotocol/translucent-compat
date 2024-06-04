@@ -1,5 +1,5 @@
-import { C, U } from "../core/mod.ts";
-import {
+import { C, CAddress, CByronAddress, CNativeScript, CScriptRef, CTransactionUnspentOutput, CValue, U } from "../core/mod";
+import type {
   Address,
   AddressDetails,
   Assets,
@@ -25,16 +25,16 @@ import {
   UTxO,
   Validator,
   WithdrawalValidator,
-} from "../types/mod.ts";
-import { Translucent } from "../translucent/mod.ts";
-import { generateMnemonic } from "../misc/bip39.ts";
-import { crc8 } from "../misc/crc8.ts";
+} from "../types/mod";
+import { Translucent } from "../translucent/mod";
+import { generateMnemonic } from "../misc/bip39";
+import { crc8 } from "../misc/crc8";
 import {
   SLOT_CONFIG_NETWORK,
   slotToBeginUnixTime,
   unixTimeToEnclosingSlot,
-} from "../plutus/time.ts";
-import { Data } from "../plutus/data.ts";
+} from "../plutus/time";
+import { Data } from "../plutus/data";
 import { toCore } from "./to";
 
 export class Utils {
@@ -75,18 +75,18 @@ export class Utils {
         networkToId(this.translucent.network),
         paymentCredential.type === "Key"
           ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(paymentCredential.hash),
-            )
+            C.Ed25519KeyHash.from_hex(paymentCredential.hash),
+          )
           : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_hex(paymentCredential.hash),
-            ),
+            C.ScriptHash.from_hex(paymentCredential.hash),
+          ),
         stakeCredential.type === "Key"
           ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(stakeCredential.hash),
-            )
+            C.Ed25519KeyHash.from_hex(stakeCredential.hash),
+          )
           : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_hex(stakeCredential.hash),
-            ),
+            C.ScriptHash.from_hex(stakeCredential.hash),
+          ),
       )
         .to_address()
         .to_bech32(undefined);
@@ -95,11 +95,11 @@ export class Utils {
         networkToId(this.translucent.network),
         paymentCredential.type === "Key"
           ? C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(paymentCredential.hash),
-            )
+            C.Ed25519KeyHash.from_hex(paymentCredential.hash),
+          )
           : C.StakeCredential.from_scripthash(
-              C.ScriptHash.from_hex(paymentCredential.hash),
-            ),
+            C.ScriptHash.from_hex(paymentCredential.hash),
+          ),
       )
         .to_address()
         .to_bech32(undefined);
@@ -123,11 +123,11 @@ export class Utils {
       networkToId(this.translucent.network),
       stakeCredential.type === "Key"
         ? C.StakeCredential.from_keyhash(
-            C.Ed25519KeyHash.from_hex(stakeCredential.hash),
-          )
+          C.Ed25519KeyHash.from_hex(stakeCredential.hash),
+        )
         : C.StakeCredential.from_scripthash(
-            C.ScriptHash.from_hex(stakeCredential.hash),
-          ),
+          C.ScriptHash.from_hex(stakeCredential.hash),
+        ),
     )
       .to_address()
       .to_bech32(undefined);
@@ -226,7 +226,7 @@ export class Utils {
   }
 }
 
-function addressFromHexOrBech32(address: string): C.Address {
+function addressFromHexOrBech32(address: string): CAddress {
   try {
     return C.Address.from_bytes(fromHex(address));
   } catch (_e) {
@@ -248,25 +248,25 @@ export function getAddressDetails(address: string): AddressDetails {
     const paymentCredential: Credential =
       parsedAddress.payment_cred().kind() === 0
         ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
+          type: "Key",
+          hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
+        }
         : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
+          type: "Script",
+          hash: toHex(
+            parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
+          ),
+        };
     const stakeCredential: Credential =
       parsedAddress.stake_cred().kind() === 0
         ? {
-            type: "Key",
-            hash: toHex(parsedAddress.stake_cred().to_keyhash()!.to_bytes()),
-          }
+          type: "Key",
+          hash: toHex(parsedAddress.stake_cred().to_keyhash()!.to_bytes()),
+        }
         : {
-            type: "Script",
-            hash: toHex(parsedAddress.stake_cred().to_scripthash()!.to_bytes()),
-          };
+          type: "Script",
+          hash: toHex(parsedAddress.stake_cred().to_scripthash()!.to_bytes()),
+        };
     return {
       type: "Base",
       networkId: parsedAddress.to_address().network_id(),
@@ -289,15 +289,15 @@ export function getAddressDetails(address: string): AddressDetails {
     const paymentCredential: Credential =
       parsedAddress.payment_cred().kind() === 0
         ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
+          type: "Key",
+          hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
+        }
         : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
+          type: "Script",
+          hash: toHex(
+            parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
+          ),
+        };
     return {
       type: "Enterprise",
       networkId: parsedAddress.to_address().network_id(),
@@ -319,15 +319,15 @@ export function getAddressDetails(address: string): AddressDetails {
     const paymentCredential: Credential =
       parsedAddress.payment_cred().kind() === 0
         ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
+          type: "Key",
+          hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
+        }
         : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
+          type: "Script",
+          hash: toHex(
+            parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
+          ),
+        };
     return {
       type: "Pointer",
       networkId: parsedAddress.to_address().network_id(),
@@ -349,15 +349,15 @@ export function getAddressDetails(address: string): AddressDetails {
     const stakeCredential: Credential =
       parsedAddress.payment_cred().kind() === 0
         ? {
-            type: "Key",
-            hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
-          }
+          type: "Key",
+          hash: toHex(parsedAddress.payment_cred().to_keyhash()!.to_bytes()),
+        }
         : {
-            type: "Script",
-            hash: toHex(
-              parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
-            ),
-          };
+          type: "Script",
+          hash: toHex(
+            parsedAddress.payment_cred().to_scripthash()!.to_bytes(),
+          ),
+        };
     return {
       type: "Reward",
       networkId: parsedAddress.to_address().network_id(),
@@ -373,7 +373,7 @@ export function getAddressDetails(address: string): AddressDetails {
 
   // Limited support for Byron addresses
   try {
-    const parsedAddress = ((address: string): C.ByronAddress => {
+    const parsedAddress = ((address: string): CByronAddress => {
       try {
         return C.ByronAddress.from_bytes(fromHex(address));
       } catch (_e) {
@@ -428,7 +428,7 @@ export function generateSeedPhrase(): string {
   return generateMnemonic(256);
 }
 
-export function valueToAssets(value: C.Value): Assets {
+export function valueToAssets(value: CValue): Assets {
   const assets: Assets = {};
   assets["lovelace"] = BigInt(value.coin().to_str());
   const ma = value.multiasset();
@@ -449,7 +449,7 @@ export function valueToAssets(value: C.Value): Assets {
   return assets;
 }
 
-export function assetsToValue(assets: Assets): C.Value {
+export function assetsToValue(assets: Assets): CValue {
   const multiAsset = C.MultiAsset.new();
   const lovelace = assets["lovelace"];
   const units = Object.keys(assets);
@@ -474,11 +474,11 @@ export function assetsToValue(assets: Assets): C.Value {
   const value = C.Value.new(
     C.BigNum.from_str(lovelace ? lovelace.toString() : "0"),
   );
-  if (units.length > 1 || !lovelace) value.set_multiasset(multiAsset);
+  if (policies.length > 0) value.set_multiasset(multiAsset);
   return value;
 }
 
-export function fromScriptRef(scriptRef: C.ScriptRef): Script {
+export function fromScriptRef(scriptRef: CScriptRef): Script {
   const kind = scriptRef.script().kind();
   switch (kind) {
     case 0:
@@ -501,7 +501,7 @@ export function fromScriptRef(scriptRef: C.ScriptRef): Script {
   }
 }
 
-export function toScriptRef(script: Script): C.ScriptRef {
+export function toScriptRef(script: Script): CScriptRef {
   switch (script.type) {
     case "Native":
       return C.ScriptRef.new(
@@ -528,8 +528,8 @@ export function toScriptRef(script: Script): C.ScriptRef {
   }
 }
 
-export function utxoToCore(utxo: UTxO): C.TransactionUnspentOutput {
-  const address: C.Address = (() => {
+export function utxoToCore(utxo: UTxO): CTransactionUnspentOutput {
+  const address: CAddress = (() => {
     try {
       return C.Address.from_bech32(utxo.address);
     } catch (_e) {
@@ -562,7 +562,7 @@ export function utxoToCore(utxo: UTxO): C.TransactionUnspentOutput {
   );
 }
 
-export function coreToUtxo(coreUtxo: C.TransactionUnspentOutput): UTxO {
+export function coreToUtxo(coreUtxo: CTransactionUnspentOutput): UTxO {
   return {
     txHash: toHex(coreUtxo.input().transaction_id().to_bytes()),
     outputIndex: parseInt(coreUtxo.input().index().to_str()),
@@ -697,7 +697,7 @@ export function nativeScriptFromJson(nativeScript: NativeScript): Script {
   };
 }
 
-function doNativeScriptFromJSON(nativeScript: NativeScript): C.NativeScript {
+function doNativeScriptFromJSON(nativeScript: NativeScript): CNativeScript {
   if (nativeScript.type === "sig") {
     return C.NativeScript.new_script_pubkey(
       C.ScriptPubkey.new(C.Ed25519KeyHash.from_hex(nativeScript.keyHash)),

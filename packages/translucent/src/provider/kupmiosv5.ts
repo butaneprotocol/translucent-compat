@@ -1,4 +1,4 @@
-import {
+import type {
   Address,
   Assets,
   Credential,
@@ -13,9 +13,9 @@ import {
   TxHash,
   Unit,
   UTxO,
-} from "../types/mod.ts";
-import { C } from "../core/mod.ts";
-import { fromHex, fromUnit, toHex } from "../utils/mod.ts";
+} from "../types/mod";
+import { C } from "../core/mod";
+import { fromHex, fromUnit, toHex } from "../utils/mod";
 export class KupmiosV5 implements Provider {
   kupoUrl: string;
   ogmiosUrl: string;
@@ -87,8 +87,7 @@ export class KupmiosV5 implements Provider {
       ? addressOrCredential
       : addressOrCredential.hash;
     const result = await fetch(
-      `${this.kupoUrl}/matches/${queryPredicate}${
-        isAddress ? "" : "/*"
+      `${this.kupoUrl}/matches/${queryPredicate}${isAddress ? "" : "/*"
       }?unspent`,
     ).then((res) => res.json());
     return this.kupmiosUtxosToUtxos(result);
@@ -104,10 +103,8 @@ export class KupmiosV5 implements Provider {
       : addressOrCredential.hash;
     const { policyId, assetName } = fromUnit(unit);
     const result = await fetch(
-      `${this.kupoUrl}/matches/${queryPredicate}${
-        isAddress ? "" : "/*"
-      }?unspent&policy_id=${policyId}${
-        assetName ? `&asset_name=${assetName}` : ""
+      `${this.kupoUrl}/matches/${queryPredicate}${isAddress ? "" : "/*"
+      }?unspent&policy_id=${policyId}${assetName ? `&asset_name=${assetName}` : ""
       }`,
     ).then((res) => res.json());
     return this.kupmiosUtxosToUtxos(result);
@@ -116,8 +113,7 @@ export class KupmiosV5 implements Provider {
   async getUtxoByUnit(unit: Unit): Promise<UTxO> {
     const { policyId, assetName } = fromUnit(unit);
     const result = await fetch(
-      `${this.kupoUrl}/matches/${policyId}.${
-        assetName ? `${assetName}` : "*"
+      `${this.kupoUrl}/matches/${policyId}.${assetName ? `${assetName}` : "*"
       }?unspent`,
     ).then((res) => res.json());
 

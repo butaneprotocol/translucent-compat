@@ -1,23 +1,23 @@
-import { C } from "../core/mod.ts";
-import {
+import { C, CTransaction } from "../core/mod";
+import type {
   PrivateKey,
   Transaction,
   TransactionWitnesses,
   TxHash,
-} from "../types/mod.ts";
-import { Translucent } from "./translucent.ts";
-import { TxSigned } from "./tx_signed.ts";
-import { fromHex, toHex } from "../utils/mod.ts";
+} from "../types/mod";
+import { Translucent } from "./translucent";
+import { TxSigned } from "./tx_signed";
+import { fromHex, toHex } from "../utils/mod";
 
 export class TxComplete {
-  txComplete: C.Transaction;
-  witnessSetBuilder: C.TransactionWitnessSetBuilder;
+  txComplete: CTransaction;
+  witnessSetBuilder;
   private tasks: (() => Promise<void>)[];
   private translucent: Translucent;
   fee: number;
   exUnits: { cpu: number; mem: number } | null = null;
 
-  constructor(translucent: Translucent, tx: C.Transaction) {
+  constructor(translucent: Translucent, tx: CTransaction) {
     this.translucent = translucent;
     this.txComplete = tx;
     this.witnessSetBuilder = C.TransactionWitnessSetBuilder.new();

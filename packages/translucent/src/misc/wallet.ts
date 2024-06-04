@@ -1,6 +1,7 @@
 import {
   Address,
   C,
+  CTransaction,
   fromHex,
   getAddressDetails,
   KeyHash,
@@ -57,27 +58,27 @@ export function walletFromSeed(
   const address =
     options.addressType === "Base"
       ? C.BaseAddress.new(
-          networkId,
-          C.StakeCredential.from_keyhash(paymentKeyHash),
-          C.StakeCredential.from_keyhash(stakeKeyHash),
-        )
-          .to_address()
-          .to_bech32(undefined)
+        networkId,
+        C.StakeCredential.from_keyhash(paymentKeyHash),
+        C.StakeCredential.from_keyhash(stakeKeyHash),
+      )
+        .to_address()
+        .to_bech32(undefined)
       : C.EnterpriseAddress.new(
-          networkId,
-          C.StakeCredential.from_keyhash(paymentKeyHash),
-        )
-          .to_address()
-          .to_bech32(undefined);
+        networkId,
+        C.StakeCredential.from_keyhash(paymentKeyHash),
+      )
+        .to_address()
+        .to_bech32(undefined);
 
   const rewardAddress =
     options.addressType === "Base"
       ? C.RewardAddress.new(
-          networkId,
-          C.StakeCredential.from_keyhash(stakeKeyHash),
-        )
-          .to_address()
-          .to_bech32(undefined)
+        networkId,
+        C.StakeCredential.from_keyhash(stakeKeyHash),
+      )
+        .to_address()
+        .to_bech32(undefined)
       : null;
 
   return {
@@ -89,7 +90,7 @@ export function walletFromSeed(
 }
 
 export function discoverOwnUsedTxKeyHashes(
-  tx: C.Transaction,
+  tx: CTransaction,
   ownKeyHashes: Array<KeyHash>,
   ownUtxos: Array<UTxO>,
 ): Array<KeyHash> {

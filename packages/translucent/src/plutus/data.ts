@@ -7,9 +7,9 @@ import {
   TSchema,
   Type,
 } from "@sinclair/typebox";
-import { C } from "../core/mod.ts";
-import { Datum, Exact, Json, Redeemer } from "../types/mod.ts";
-import { fromHex, fromText, toHex } from "../utils/utils.ts";
+import { C, CPlutusData } from "../core/mod";
+import { Datum, Exact, Json, Redeemer } from "../types/mod";
+import { fromHex, fromText, toHex } from "../utils/utils";
 
 export class Constr<T> {
   index: number;
@@ -147,28 +147,28 @@ export const Data = {
       anyOf: items.map((item, index) =>
         item.anyOf[0].fields.length === 0
           ? {
-              ...item.anyOf[0],
-              index,
-            }
+            ...item.anyOf[0],
+            index,
+          }
           : {
-              dataType: "constructor",
-              title: (() => {
-                const title = item.anyOf[0].fields[0].title;
-                if (
-                  (title as string).charAt(0) !==
-                  (title as string).charAt(0).toUpperCase()
-                ) {
-                  throw new Error(
-                    `Enum '${title}' needs to start with an uppercase letter.`,
-                  );
-                }
-                return item.anyOf[0].fields[0].title;
-              })(),
-              index,
-              fields:
-                item.anyOf[0].fields[0].items ||
-                item.anyOf[0].fields[0].anyOf[0].fields,
-            },
+            dataType: "constructor",
+            title: (() => {
+              const title = item.anyOf[0].fields[0].title;
+              if (
+                (title as string).charAt(0) !==
+                (title as string).charAt(0).toUpperCase()
+              ) {
+                throw new Error(
+                  `Enum '${title}' needs to start with an uppercase letter.`,
+                );
+              }
+              return item.anyOf[0].fields[0].title;
+            })(),
+            index,
+            fields:
+              item.anyOf[0].fields[0].items ||
+              item.anyOf[0].fields[0].anyOf[0].fields,
+          },
       ),
     });
     return union;
@@ -267,7 +267,7 @@ function to<T = Data>(
   type?: T,
   recType?: string,
 ): Datum | Redeemer {
-  function serialize(data: Data): C.PlutusData {
+  function serialize(data: Data): CPlutusData {
     try {
       if (typeof data === "bigint") {
         return C.PlutusData.new_integer(C.BigInt.from_str(data.toString()));
@@ -314,7 +314,7 @@ function to<T = Data>(
  *  Or apply a shape and cast the cbor encoded data to a certain type.
  */
 function from<T = Data>(raw: Datum | Redeemer, type?: T): T {
-  function deserialize(data: C.PlutusData): Data {
+  function deserialize(data: CPlutusData): Data {
     if (data.kind() === 0) {
       const constr = data.as_constr_plutus_data()!;
       const l = constr.data();
@@ -563,14 +563,14 @@ function castFrom<T = Data>(data: Data, type: T): T {
             // check if named args
             const args = enumShape.fields[0].title
               ? Object.fromEntries(
-                  enumShape.fields.map((field: Json, index: number) => [
-                    field.title,
-                    castFrom<T>(data.fields[index], field),
-                  ]),
-                )
-              : enumShape.fields.map((field: Json, index: number) =>
+                enumShape.fields.map((field: Json, index: number) => [
+                  field.title,
                   castFrom<T>(data.fields[index], field),
-                );
+                ]),
+              )
+              : enumShape.fields.map((field: Json, index: number) =>
+                castFrom<T>(data.fields[index], field),
+              );
 
             return {
               [enumShape.title]: args,
@@ -744,14 +744,14 @@ function castTo<T>(
             // check if named args
             args instanceof Array
               ? args.map((item, index) =>
-                  castTo<T>(item, enumEntry.fields[index], recType, recShape),
-                )
+                castTo<T>(item, enumEntry.fields[index], recType, recShape),
+              )
               : enumEntry.fields.map((entry: Json) => {
-                  const [_, item]: [string, Json] = Object.entries(args).find(
-                    ([title]) => title === entry.title,
-                  )!;
-                  return castTo<T>(item, entry, recType, recShape);
-                }),
+                const [_, item]: [string, Json] = Object.entries(args).find(
+                  ([title]) => title === entry.title,
+                )!;
+                return castTo<T>(item, entry, recType, recShape);
+              }),
           );
         }
       }

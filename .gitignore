@@ -11,3 +11,4 @@ uplc/target
 seed.txt
 package-lock.json
 .vscode/
+packages/translucent/build

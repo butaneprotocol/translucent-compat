@@ -1,5 +1,5 @@
-import { C } from "../core/core.ts";
-import {
+import { C, CBigNum, CEd25519KeyHashes, CNativeScript } from "../core/core";
+import type {
   Address,
   Assets,
   Credential,
@@ -20,22 +20,22 @@ import {
   UnixTime,
   UTxO,
 } from "../types/types.ts";
-import { PROTOCOL_PARAMETERS_DEFAULT } from "../utils/mod.ts";
+import { PROTOCOL_PARAMETERS_DEFAULT } from "../utils/mod";
 import {
   coreToUtxo,
   fromHex,
   getAddressDetails,
   toHex,
-} from "../utils/utils.ts";
+} from "../utils/utils";
 
 /** Concatentation of txHash + outputIndex */
 type FlatOutRef = string;
 
 function verifyNativeScript(
-  ns: C.NativeScript,
-  start?: C.BigNum,
-  end?: C.BigNum,
-  edKeyHashes?: C.Ed25519KeyHashes,
+  ns: CNativeScript,
+  start?: CBigNum,
+  end?: CBigNum,
+  edKeyHashes?: CEd25519KeyHashes,
 ) {
   return true;
 }
@@ -89,8 +89,8 @@ export class Emulator implements Provider {
           assets,
           datumHash: outputData?.asHash
             ? C.hash_plutus_data(
-                C.PlutusData.from_bytes(fromHex(outputData.asHash)),
-              ).to_hex()
+              C.PlutusData.from_bytes(fromHex(outputData.asHash)),
+            ).to_hex()
             : outputData?.hash,
           datum: outputData?.inline,
           scriptRef: outputData?.scriptRef,
@@ -99,6 +99,13 @@ export class Emulator implements Provider {
       };
     });
     this.protocolParameters = protocolParameters;
+  }
+
+  addUTxO(utxo: UTxO) {
+    this.ledger[utxo.txHash + utxo.outputIndex] = {
+      utxo,
+      spent: false,
+    }
   }
 
   now(): UnixTime {
@@ -352,7 +359,7 @@ export class Emulator implements Provider {
       return scriptHashes;
     })();
 
-    const nativeHashesOptional: Record<ScriptHash, C.NativeScript> = {};
+    const nativeHashesOptional: Record<ScriptHash, CNativeScript> = {};
     const plutusHashesOptional: ScriptHash[] = [];
 
     const plutusHashes = (() => {

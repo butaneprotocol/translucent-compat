@@ -1,4 +1,4 @@
-import {
+import type {
   Address,
   Assets,
   CostModels,
@@ -14,9 +14,9 @@ import {
   TxHash,
   Unit,
   UTxO,
-} from "../types/mod.ts";
-import { C } from "../core/mod.ts";
-import { costModelKeys, fromUnit } from "../utils/mod.ts";
+} from "../types/mod";
+import { C } from "../core/mod";
+import { costModelKeys, fromUnit } from "../utils/mod";
 import * as ogmios from "@cardano-ogmios/schema";
 
 function fromMaybeBuffer(x: string | Buffer) {
@@ -97,11 +97,11 @@ export class Kupmios implements Provider {
               result.scriptExecutionPrices!.cpu.split("/");
             const protocolParams: ProtocolParameters = {
               minFeeA: result.minFeeCoefficient,
-              minFeeB: Number(result.minFeeConstant.lovelace),
+              minFeeB: Number(result.minFeeConstant.ada.lovelace),
               maxTxSize: result.maxTransactionSize!.bytes,
               maxValSize: result.maxValueSize!.bytes,
-              keyDeposit: BigInt(result.stakeCredentialDeposit.lovelace),
-              poolDeposit: BigInt(result.stakePoolDeposit.lovelace),
+              keyDeposit: BigInt(result.stakeCredentialDeposit.ada.lovelace),
+              poolDeposit: BigInt(result.stakePoolDeposit.ada.lovelace),
               priceMem: [BigInt(memNum), BigInt(memDenom)],
               priceStep: [BigInt(stepsNum), BigInt(stepsDenom)],
               maxTxExMem: BigInt(
@@ -130,13 +130,13 @@ export class Kupmios implements Provider {
       typeof addressOrCredential == "string"
         ? addressOrCredential
         : C.EnterpriseAddress.new(
-            0,
-            C.StakeCredential.from_keyhash(
-              C.Ed25519KeyHash.from_hex(addressOrCredential.hash),
-            ),
-          )
-            .to_address()
-            .to_bech32(undefined);
+          0,
+          C.StakeCredential.from_keyhash(
+            C.Ed25519KeyHash.from_hex(addressOrCredential.hash),
+          ),
+        )
+          .to_address()
+          .to_bech32(undefined);
     let params: ogmios.UtxoByAddresses | ogmios.UtxoByOutputReferences = {
       addresses: [addy],
     };
@@ -150,8 +150,8 @@ export class Kupmios implements Provider {
               | ogmios.QueryLedgerStateUtxoResponse
               | ogmios.QueryLedgerStateEraMismatch
               | ogmios.QueryLedgerStateAcquiredExpired = JSON.parse(
-              fromMaybeBuffer(msg.data),
-            );
+                fromMaybeBuffer(msg.data),
+              );
             if ("result" in response) {
               res(
                 response.result.map((utxo) => {
@@ -169,7 +169,7 @@ export class Kupmios implements Provider {
             } else {
               console.error("UTXO Fetch error", response.error);
             }
-          } catch {}
+          } catch { }
         },
       );
     });
@@ -185,10 +185,8 @@ export class Kupmios implements Provider {
       : addressOrCredential.hash;
     const { policyId, assetName } = fromUnit(unit);
     const result = (await fetch(
-      `${this.kupoUrl}/matches/${queryPredicate}${
-        isAddress ? "" : "/*"
-      }?unspent&policy_id=${policyId}${
-        assetName ? `&asset_name=${assetName}` : ""
+      `${this.kupoUrl}/matches/${queryPredicate}${isAddress ? "" : "/*"
+      }?unspent&policy_id=${policyId}${assetName ? `&asset_name=${assetName}` : ""
       }`,
       {
         headers: this.headers,
@@ -207,8 +205,7 @@ export class Kupmios implements Provider {
   async getUtxoByUnit(unit: Unit): Promise<UTxO> {
     const { policyId, assetName } = fromUnit(unit);
     const result = (await fetch(
-      `${this.kupoUrl}/matches/${policyId}.${
-        assetName ? `${assetName}` : "*"
+      `${this.kupoUrl}/matches/${policyId}.${assetName ? `${assetName}` : "*"
       }?unspent`,
       {
         headers: this.headers,
@@ -246,8 +243,8 @@ export class Kupmios implements Provider {
               | ogmios.QueryLedgerStateUtxoResponse
               | ogmios.QueryLedgerStateEraMismatch
               | ogmios.QueryLedgerStateAcquiredExpired = JSON.parse(
-              fromMaybeBuffer(msg.data),
-            );
+                fromMaybeBuffer(msg.data),
+              );
             if ("result" in response) {
               res(
                 response.result.map((utxo) => {
@@ -265,7 +262,7 @@ export class Kupmios implements Provider {
             } else {
               console.error("UTXO Fetch error", response.error);
             }
-          } catch {}
+          } catch { }
         },
       );
     });
