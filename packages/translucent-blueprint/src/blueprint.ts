@@ -1,3 +1,5 @@
+import { readFile, writeFile } from "fs/promises";
+
 type Blueprint = {
   preamble: {
     title: string;
@@ -41,7 +43,9 @@ type Blueprint = {
 };
 
 export async function parseBlueprint(blueprint: string, plutusTs: string) {
-  const plutusJson: Blueprint = JSON.parse(await Bun.file(blueprint).text());
+  const plutusJson: Blueprint = JSON.parse(
+    await readFile(blueprint, { encoding: "utf8" }),
+  );
 
   const plutusVersion =
     "Plutus" + plutusJson.preamble.plutusVersion.toUpperCase();
@@ -99,7 +103,7 @@ import { applyParamsToScript, Data, Validator } from "../translucent/index.ts"`;
 
   const plutus = imports + "\n\n" + validators.join("\n\n");
 
-  await Bun.write(plutusTs, plutus);
+  await writeFile(plutusTs, plutus, { encoding: "utf8" });
 
   console.log(
     "%cGenerated %cplutus.ts",

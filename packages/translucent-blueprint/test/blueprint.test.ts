@@ -1,21 +1,20 @@
 import { parseBlueprint } from "../src/blueprint";
-import path from "path";
+import { readFile, writeFile } from "fs/promises";
+import inputPlutusJson from "./fixtures/plutus-vesting.json";
 import expectedResult from "./fixtures/plutus-vesting.ts.txt";
+import { jest, test, expect, mock } from "bun:test";
 
-jest.spyOn(Bun, "write").mockImplementation((path, data) => {
-  return Promise.resolve(data.toString().length);
-});
+mock.module("fs/promises", () => ({
+  writeFile: jest.fn().mockResolvedValue(0),
+  readFile: jest.fn().mockResolvedValue(JSON.stringify(inputPlutusJson)),
+}));
 
-it("should successfully parse any plutus.json", async () => {
+test("should successfully parse any plutus.json", async () => {
   const TARGET_FILENAME = "plutus.ts";
 
-  const plutusLocation = path.join(
-    import.meta.dir,
-    "./fixtures/plutus-vesting.json",
-  );
-  await parseBlueprint(plutusLocation, TARGET_FILENAME);
+  await parseBlueprint("/whatever.json", TARGET_FILENAME);
 
-  const writeMock = Bun.write as jest.MockedFunction<typeof Bun.write>;
+  const writeMock = writeFile as jest.Mock<typeof writeFile>;
 
   expect(writeMock).toHaveBeenCalled();
 

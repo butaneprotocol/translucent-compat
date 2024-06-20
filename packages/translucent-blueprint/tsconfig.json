@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": ["bun-types", "jest"],
+    "lib": ["ESNext"],
+    "module": "esnext",
+    "moduleResolution": "Node"
+  },
+  "include": ["./src/**/*.ts"],
+  "exclude": ["**/node_modules"]
+}
